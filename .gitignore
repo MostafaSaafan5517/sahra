@@ -1,0 +1,26 @@
+# dependencies
+/node_modules
+
+# build output
+/dist
+
+# testing
+/coverage
+/test-results/
+/playwright-report/
+/blob-report/
+/.lighthouseci/
+
+# env files
+.env*
+!.env.example
+
+# vercel
+.vercel
+
+# misc
+.DS_Store
+*.local
+*.tsbuildinfo
+npm-debug.log*
+.pnpm-debug.log*
