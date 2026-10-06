@@ -60,6 +60,13 @@ GLSL lives in `src/scene/shaders/*.glsl`, imported as strings with Vite's `?raw`
 - Headless Chromium renders WebGL in software (Playwright passes `--enable-unsafe-swiftshader`), so the scene tests work on CI machines without a GPU. Scene tests take a few seconds each because of it.
 - A new test should be seen failing once: break the code it guards, run it, restore.
 
+## Lighthouse and CI
+
+- `pnpm lighthouse` (after `pnpm build`) runs Lighthouse CI three times on the mobile preset against `dist/`, served by Lighthouse CI's own static server (gzip, like Vercel). It fails when the median run scores below Performance 90 or Accessibility, Best Practices, SEO 95, or shifts layout more than 0.01. Reports land in `.lighthouseci/` (open the `.html` files).
+- Lighthouse launches its own Chrome, which has no GPU in CI. `--enable-unsafe-swiftshader` in `lighthouserc.json` gives it software WebGL, and `scripts/check-lighthouse-scene.ts` fails the run unless the scene chunk was downloaded in every run. Without that guard, a Chrome without WebGL would never load Three.js and the scores would flatter the page.
+- The metric to watch is Total Blocking Time: Lighthouse simulates a slow phone CPU (4x), and Three.js's startup shows up there.
+- GitHub Actions (`.github/workflows/ci.yml`) runs on pushes to `main` and on pull requests, in three jobs: format, lint, typecheck and unit tests; end-to-end tests; Lighthouse. Each job sets up through `.github/actions/setup` (pnpm from `packageManager`, Node from `engines.node`, frozen lockfile). Lighthouse reports are uploaded as an artifact on every run, the Playwright report on failure.
+
 ## Dependencies
 
 - Verify a package's current version and peer ranges (`npm view <pkg> version peerDependencies`) before adding it.
@@ -76,6 +83,7 @@ pnpm lint
 pnpm format         # or format:check
 pnpm test           # unit tests (Vitest); test:watch while working
 pnpm test:e2e       # end-to-end tests (Playwright), builds and serves on 3301 first
+pnpm lighthouse     # Lighthouse CI on dist/ (run pnpm build first)
 ```
 
 Playwright reuses a server already running on port 3301 outside CI, so stop any `pnpm preview` left running before trusting a local end-to-end run against changed code.
@@ -95,11 +103,17 @@ src/
 e2e/
   test.ts            Playwright test + expect, failing on page errors
   *.spec.ts          end-to-end specs
+scripts/
+  check-lighthouse-scene.ts   fails unless the scene loaded in every Lighthouse run (Node runs .ts directly)
+.github/
+  workflows/ci.yml   checks, end-to-end and Lighthouse jobs
+  actions/setup/     shared pnpm + Node + install steps
+lighthouserc.json    Lighthouse CI: runs, Chrome flags, score budgets
 vite.config.ts       Tailwind plugin, %SITE_NAME% plugin, ports, chunk size limit
 vitest.config.ts     unit tests: src/**/*.test.ts
 playwright.config.ts desktop + mobile profiles against the production build
 tsconfig.json        app code (browser types)
-tsconfig.node.json   config files and e2e/ (Node types, plus DOM for code run in the page)
+tsconfig.node.json   config files, e2e/ and scripts/ (Node types, plus DOM for code run in the page)
 ```
 
 ## Status

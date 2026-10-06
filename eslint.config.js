@@ -32,6 +32,12 @@ export default defineConfig([
     languageOptions: { globals: globals.node },
   },
   {
+    // Command-line scripts report to the terminal.
+    files: ["scripts/**"],
+    languageOptions: { globals: globals.node },
+    rules: { "no-console": "off" },
+  },
+  {
     // Plain JavaScript files (this config) are outside the TypeScript projects.
     files: ["**/*.js"],
     extends: [tseslint.configs.disableTypeChecked],
