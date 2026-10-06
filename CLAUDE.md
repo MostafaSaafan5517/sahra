@@ -56,12 +56,21 @@ GLSL lives in `src/scene/shaders/*.glsl`, imported as strings with Vite's `?raw`
 - The vertex shader computes everything else, every frame: line depth (evenly spaced in inverse depth, so evenly spaced on screen), line width (the view's width at that depth, from `uAspect`), the downwind drift (wrapping at the edges), the noise flow field, the dune height (ridged noise with a warp, creeping downwind), a flatter foreground (so the nearest lines stay below the bottom edge), crest shading, point size and fading.
 - Per frame, JavaScript only updates `uTime`. Tunable values live in `src/scene/settings.ts`.
 
+## How the gusts work
+
+- `wind.ts` turns pointer and finger movement into gusts: each has a ground position (the screen point projected onto a plane at the dunes' average height; nothing in the sky), a direction, a strength from the pointer's speed, and a start time on the shader's clock (`performance.now()` seconds, like `uTime`).
+- Gusts live in `GustField`: two flat `Float32Array`s that are the uniform values themselves (`uGustOrigins`, `uGustDirections`), `MAX_GUSTS` slots, the oldest replaced first. The vertex shader loops over them: each pushes nearby sand along its direction, scatters and lifts it, then lets it settle over the gust's life.
+- `GustTrail` makes at most one gust per `gustLife / MAX_GUSTS` seconds, so a slot is never reused while its gust is still blowing (the sand would snap back). A stroke needs two samples for a speed; a pause over 0.25 s or a lifted finger starts a new stroke.
+- Mouse and pen use pointer events; fingers use passive touch events, which keep arriving while the browser scrolls or zooms and never block either. Listeners are attached only when the scene animates (not with reduced motion).
+- To see gusts while developing, use a real browser window or a headless script: the in-app preview pane, when hidden, pauses animation frames and throttles timers, so synthetic pointer events there arrive seconds apart and never form a stroke.
+
 ## Testing conventions
 
 - **Unit tests (Vitest)** sit next to the code as `src/**/*.test.ts` and cover pure logic. Tests describe behaviour in plain words.
 - **End-to-end tests (Playwright)** live in `e2e/` and run against the production build (`pnpm build && pnpm preview` on port 3301), in two profiles: `desktop` (Desktop Chrome) and `mobile` (Pixel 7: small viewport, touch). Import `test` and `expect` from `e2e/test.ts`, never from `@playwright/test`: its automatic fixture fails any test whose page logs a console error or throws.
 - Every page gets an axe check (WCAG 2.2 AA tags plus best practices) with the scene running.
 - Motion is checked by comparing two screenshots of the canvas half a second apart, as raw bytes (`Buffer.equals`). Never `expect(buffer).toEqual(buffer)` on screenshots: when it fails, building the diff takes minutes.
+- Touch drags go through the DevTools protocol (`Input.dispatchTouchEvent`), since Playwright has no touch-drag helper; `sweepAcrossTheSand` in `e2e/home.spec.ts` uses it on the phone profile and the mouse elsewhere.
 - Browser launch flags (`launchOptions`) can only be set at the top of a spec file, so a test that needs a different browser (like `e2e/no-webgl2.spec.ts`, which runs Chromium with `--disable-webgl2`) gets its own file.
 - Headless Chromium renders WebGL in software (Playwright passes `--enable-unsafe-swiftshader`), so the scene tests work on CI machines without a GPU. It is slow: measured on the dune scene, about 60 frames a second at desktop size but about 12 on the phone profile, where drawing the large near grains dominates. Two such pages at once starve each other (even the canvas fade-in stalls), so Playwright runs with one worker.
 - A new test should be seen failing once: break the code it guards, run it, restore.
@@ -111,9 +120,11 @@ src/
   main.ts            entry for the home page: waits for idle, checks WebGL2, lazy-loads the scene
   style.css          Tailwind and global styles
   scene/
-    scene.ts         Three.js renderer, camera, dune points, uniforms, render loop
+    scene.ts         Three.js renderer, dune points, uniforms, render loop, input wiring
+    camera.ts        the camera and the near and far depths (shared with the tests)
+    wind.ts          gusts: GustField (uniform arrays), groundPoint, GustTrail, listeners (wind.test.ts)
     dunes.ts         the points' layout and the seeded random generator (unit-tested in dunes.test.ts)
-    settings.ts      tunable values: counts, wind, flow, dune height, grain size
+    settings.ts      tunable values: counts, wind, flow, dune height, grain size, gusts
     shaders/         noise.glsl, dunes.vert.glsl (all motion), dunes.frag.glsl (round soft grains)
 e2e/
   test.ts            Playwright test + expect, failing on page errors

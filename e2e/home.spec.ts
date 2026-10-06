@@ -22,6 +22,35 @@ async function sceneMoves(page: Page): Promise<boolean> {
   return !(await canvas.screenshot()).equals(before);
 }
 
+/**
+ * Drags across the lower half of the view, over the sand: a real touch drag on the phone profile
+ * (through the DevTools protocol, as Playwright has no touch-drag helper), the mouse elsewhere.
+ */
+async function sweepAcrossTheSand(page: Page, isMobile: boolean): Promise<void> {
+  const viewport = page.viewportSize();
+  if (!viewport) throw new Error("The scene tests need a fixed viewport.");
+  const { width, height } = viewport;
+  const y = height * 0.75;
+  if (!isMobile) {
+    await page.mouse.move(width * 0.1, y);
+    await page.mouse.move(width * 0.9, y, { steps: 12 });
+    return;
+  }
+  const devtools = await page.context().newCDPSession(page);
+  const fingerAt = (x: number) => [{ x, y }];
+  await devtools.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: fingerAt(width * 0.1),
+  });
+  for (let step = 1; step <= 12; step++) {
+    await devtools.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: fingerAt(width * (0.1 + (step * 0.8) / 12)),
+    });
+  }
+  await devtools.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+}
+
 test("shows the content with the site name", async ({ page }) => {
   await page.goto("/");
   await expect(page).toHaveTitle(SITE_NAME);
@@ -64,11 +93,31 @@ test("animates the scene", async ({ page }) => {
   expect(await sceneMoves(page), "the scene moves").toBe(true);
 });
 
+test("blows gusts from the mouse and the finger", async ({ page, isMobile }) => {
+  await page.goto("/");
+  await runningSceneCanvas(page);
+  await sweepAcrossTheSand(page, isMobile);
+  await page.waitForTimeout(300);
+  await expect(page.locator("[data-scene]")).toHaveAttribute("data-state", "running");
+});
+
 test.describe("with reduced motion", () => {
   test.use({ contextOptions: { reducedMotion: "reduce" } });
 
   test("draws one still frame", async ({ page }) => {
     await page.goto("/");
     expect(await sceneMoves(page), "the scene moves").toBe(false);
+  });
+
+  test("keeps the still frame still when the pointer or a finger moves", async ({
+    page,
+    isMobile,
+  }) => {
+    await page.goto("/");
+    const canvas = await runningSceneCanvas(page);
+    const before = await canvas.screenshot();
+    await sweepAcrossTheSand(page, isMobile);
+    await page.waitForTimeout(300);
+    expect((await canvas.screenshot()).equals(before), "the still frame stayed still").toBe(true);
   });
 });

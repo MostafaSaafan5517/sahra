@@ -14,6 +14,13 @@ uniform float uWindSpeed;
 uniform float uFlowStrength;
 uniform float uDuneHeight;
 uniform float uPointSize;
+// Per gust: ground x, ground z, start time, strength (0..1).
+uniform vec4 uGustOrigins[MAX_GUSTS];
+// Per gust: direction on the ground (unit x, z), unused, unused.
+uniform vec4 uGustDirections[MAX_GUSTS];
+uniform float uGustStrength;
+uniform float uGustRadius;
+uniform float uGustLife;
 
 varying float vAlpha;
 varying float vShade;
@@ -54,6 +61,25 @@ void main() {
   world.y = height;
   // Near the crests, some grains lift off a little, as blown sand does.
   world.y += max(0.0, snoise(world.xz * 1.3 + vec2(uTime * 0.25, 0.0))) * uFlowStrength * 0.25 * crestiness;
+
+  // Gusts from the visitor's pointer: each one pushes nearby sand along its direction, scatters
+  // it a little and lifts it, then lets it settle back over the gust's life.
+  vec2 scatter = vec2(cos(seed * 6.2832), sin(seed * 6.2832));
+  float lift = 0.25 + 0.35 * fract(seed * 7.13);
+  vec3 push = vec3(0.0);
+  for (int i = 0; i < MAX_GUSTS; i++) {
+    vec4 origin = uGustOrigins[i];
+    float age = uTime - origin.z;
+    if (age < 0.0 || age > uGustLife) continue;
+    vec2 offset = world.xz - origin.xy;
+    float falloff = exp(-dot(offset, offset) / (uGustRadius * uGustRadius));
+    float envelope = smoothstep(0.0, 0.18, age) * exp(-age * 4.6 / uGustLife)
+      * (1.0 - smoothstep(0.8 * uGustLife, uGustLife, age));
+    float amount = falloff * envelope * origin.w * uGustStrength;
+    push.xz += (uGustDirections[i].xy * 0.8 + scatter * 0.35) * amount;
+    push.y += lift * amount;
+  }
+  world += push;
 
   // Crests catch more light than troughs.
   vShade = mix(0.45, 1.0, crestiness);

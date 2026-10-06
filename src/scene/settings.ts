@@ -11,4 +11,10 @@ export const SCENE_SETTINGS = {
   duneHeight: 0.9,
   /** Grain size in CSS pixels at four units from the camera. */
   pointSize: 2,
+  /** How far a full-strength gust pushes the sand. */
+  gustStrength: 0.8,
+  /** How far a gust reaches across the sand. */
+  gustRadius: 1.4,
+  /** Seconds from a gust's start until its sand has settled back. */
+  gustLife: 2.4,
 };

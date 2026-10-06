@@ -1,28 +1,15 @@
-import {
-  Color,
-  MathUtils,
-  PerspectiveCamera,
-  Points,
-  Scene,
-  ShaderMaterial,
-  WebGLRenderer,
-} from "three";
+import { Color, MathUtils, Points, Scene, ShaderMaterial, WebGLRenderer } from "three";
+import { createCamera, FAR_DEPTH, FIELD_OF_VIEW, NEAR_DEPTH } from "./camera";
 import { createDuneGeometry, seededRandom } from "./dunes";
 import { SCENE_SETTINGS } from "./settings";
 import fragmentShader from "./shaders/dunes.frag.glsl?raw";
 import duneVertexShader from "./shaders/dunes.vert.glsl?raw";
 import noise from "./shaders/noise.glsl?raw";
+import { GustField, GustTrail, listenForGusts, MAX_GUSTS } from "./wind";
 
 /** Matches the page background (`bg-neutral-950`), so the canvas fades in without a seam. */
 const BACKGROUND = 0x0a0a0a;
 const MAX_PIXEL_RATIO = 2;
-const FIELD_OF_VIEW = 35;
-/** The camera stands this high above the sand and looks at the ground this far ahead. */
-const CAMERA_HEIGHT = 1.4;
-const LOOK_DISTANCE = 12;
-/** Distance from the camera to the nearest and the farthest dune line. */
-const NEAR_DEPTH = 1.2;
-const FAR_DEPTH = 40;
 /** Display (sRGB) values: the fragment shader writes them out unchanged. */
 const SAND_COLOR = new Color(0.85, 0.77, 0.63);
 
@@ -45,9 +32,8 @@ export async function startScene(
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
   renderer.setClearColor(BACKGROUND);
 
-  const camera = new PerspectiveCamera(FIELD_OF_VIEW, 1, 0.1, FAR_DEPTH * 2);
-  camera.position.set(0, CAMERA_HEIGHT, 0);
-  camera.lookAt(0, 0, -LOOK_DISTANCE);
+  const camera = createCamera(1);
+  const gusts = new GustField();
 
   const uniforms = {
     uTime: { value: 0 },
@@ -60,6 +46,11 @@ export async function startScene(
     uFlowStrength: { value: SCENE_SETTINGS.flowStrength },
     uDuneHeight: { value: SCENE_SETTINGS.duneHeight },
     uPointSize: { value: SCENE_SETTINGS.pointSize },
+    uGustOrigins: { value: gusts.origins },
+    uGustDirections: { value: gusts.directions },
+    uGustStrength: { value: SCENE_SETTINGS.gustStrength },
+    uGustRadius: { value: SCENE_SETTINGS.gustRadius },
+    uGustLife: { value: SCENE_SETTINGS.gustLife },
     uColor: { value: SAND_COLOR },
     uOpacity: { value: 0.9 },
   };
@@ -67,6 +58,7 @@ export async function startScene(
     vertexShader: `${noise}\n${duneVertexShader}`,
     fragmentShader,
     uniforms,
+    defines: { MAX_GUSTS },
     transparent: true,
     depthTest: false,
     depthWrite: false,
@@ -102,5 +94,8 @@ export async function startScene(
     renderer.render(scene, camera);
   }
   render(performance.now());
-  if (animate) renderer.setAnimationLoop(render);
+  if (!animate) return;
+  renderer.setAnimationLoop(render);
+  // A slot is reused only after its gust has settled, so the sand never snaps back early.
+  listenForGusts(new GustTrail(camera, gusts, SCENE_SETTINGS.gustLife / MAX_GUSTS));
 }
