@@ -1,12 +1,5 @@
-import {
-  BufferGeometry,
-  Float32BufferAttribute,
-  PerspectiveCamera,
-  Points,
-  Scene,
-  ShaderMaterial,
-  WebGLRenderer,
-} from "three";
+import { PerspectiveCamera, Points, Scene, ShaderMaterial, WebGLRenderer } from "three";
+import { createGrid } from "./grid";
 import fragmentShader from "./shaders/points.frag.glsl?raw";
 import vertexShader from "./shaders/points.vert.glsl?raw";
 
@@ -52,7 +45,7 @@ export async function startScene(
     depthWrite: false,
   });
   const scene = new Scene();
-  scene.add(new Points(createGrid(), material));
+  scene.add(new Points(createGrid(COLUMNS, ROWS), material));
 
   function resize(): void {
     const { clientWidth: width, clientHeight: height } = canvas;
@@ -72,21 +65,4 @@ export async function startScene(
   }
   render(performance.now());
   if (animate) renderer.setAnimationLoop(render);
-}
-
-/** A flat grid of points on the ground plane, receding from the camera. */
-function createGrid(): BufferGeometry {
-  const positions = new Float32Array(COLUMNS * ROWS * 3);
-  let index = 0;
-  for (let row = 0; row < ROWS; row++) {
-    const z = 2 - (row / (ROWS - 1)) * 12;
-    for (let column = 0; column < COLUMNS; column++) {
-      positions[index++] = (column / (COLUMNS - 1)) * 12 - 6;
-      positions[index++] = 0;
-      positions[index++] = z;
-    }
-  }
-  const geometry = new BufferGeometry();
-  geometry.setAttribute("position", new Float32BufferAttribute(positions, 3));
-  return geometry;
 }

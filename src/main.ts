@@ -18,6 +18,11 @@ function whenPageIsIdle(task: () => void): void {
   else addEventListener("load", schedule, { once: true });
 }
 
+/**
+ * Adds the scene to the container and records the outcome in its `data-state`:
+ * `unsupported` (no WebGL2), `running` (first frame on screen) or `failed`.
+ * CSS reads the state to fade the canvas in.
+ */
 async function mountScene(container: HTMLElement): Promise<void> {
   const canvas = document.createElement("canvas");
   // Points need no depth buffer, stencil or antialiasing; an opaque canvas composites cheaper.
@@ -28,19 +33,23 @@ async function mountScene(container: HTMLElement): Promise<void> {
     stencil: false,
   });
   // Without WebGL2 the page simply stays as it is; Three.js is never downloaded.
-  if (!context) return;
+  if (!context) {
+    container.dataset.state = "unsupported";
+    return;
+  }
 
   canvas.className =
-    "block size-full opacity-0 motion-safe:transition-opacity motion-safe:duration-1000";
+    "block size-full opacity-0 group-data-[state=running]:opacity-100 motion-safe:transition-opacity motion-safe:duration-1000";
   container.append(canvas);
   try {
     const { startScene } = await import("./scene/scene");
     await startScene(canvas, context, {
       animate: !matchMedia("(prefers-reduced-motion: reduce)").matches,
     });
-    canvas.classList.replace("opacity-0", "opacity-100");
+    container.dataset.state = "running";
   } catch (error) {
     canvas.remove();
+    container.dataset.state = "failed";
     console.error("The scene failed to start", error);
   }
 }

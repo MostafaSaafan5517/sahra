@@ -46,7 +46,19 @@ The project name lives only in `src/config.ts` (`SITE_NAME`). HTML pages use the
 5. Shaders compile with `renderer.compileAsync` (non-blocking where the browser supports parallel shader compilation); the first frame is drawn, and only then does the canvas fade in.
 6. With `prefers-reduced-motion: reduce`, one still frame is drawn and no animation loop starts.
 
+The container's `data-state` records the outcome: `unsupported` (no WebGL2), `running` (first frame on screen) or `failed`. CSS reads it (the canvas fades in on `running`), and tests wait on it instead of on timers.
+
 GLSL lives in `src/scene/shaders/*.glsl`, imported as strings with Vite's `?raw` suffix.
+
+## Testing conventions
+
+- **Unit tests (Vitest)** sit next to the code as `src/**/*.test.ts` and cover pure logic. Tests describe behaviour in plain words.
+- **End-to-end tests (Playwright)** live in `e2e/` and run against the production build (`pnpm build && pnpm preview` on port 3301), in two profiles: `desktop` (Desktop Chrome) and `mobile` (Pixel 7: small viewport, touch). Import `test` and `expect` from `e2e/test.ts`, never from `@playwright/test`: its automatic fixture fails any test whose page logs a console error or throws.
+- Every page gets an axe check (WCAG 2.2 AA tags plus best practices) with the scene running.
+- Motion is checked by comparing two screenshots of the canvas half a second apart, as raw bytes (`Buffer.equals`). Never `expect(buffer).toEqual(buffer)` on screenshots: when it fails, building the diff takes minutes.
+- Browser launch flags (`launchOptions`) can only be set at the top of a spec file, so a test that needs a different browser (like `e2e/no-webgl2.spec.ts`, which runs Chromium with `--disable-webgl2`) gets its own file.
+- Headless Chromium renders WebGL in software (Playwright passes `--enable-unsafe-swiftshader`), so the scene tests work on CI machines without a GPU. Scene tests take a few seconds each because of it.
+- A new test should be seen failing once: break the code it guards, run it, restore.
 
 ## Dependencies
 
@@ -62,7 +74,11 @@ pnpm preview        # serve dist/ on http://localhost:3301
 pnpm typecheck      # app code (tsconfig.json) and config files (tsconfig.node.json)
 pnpm lint
 pnpm format         # or format:check
+pnpm test           # unit tests (Vitest); test:watch while working
+pnpm test:e2e       # end-to-end tests (Playwright), builds and serves on 3301 first
 ```
+
+Playwright reuses a server already running on port 3301 outside CI, so stop any `pnpm preview` left running before trusting a local end-to-end run against changed code.
 
 ## Folder structure
 
@@ -74,10 +90,16 @@ src/
   style.css          Tailwind and global styles
   scene/
     scene.ts         Three.js renderer, camera, points, render loop
+    grid.ts          the point grid's geometry (unit-tested in grid.test.ts)
     shaders/         GLSL vertex and fragment shaders
+e2e/
+  test.ts            Playwright test + expect, failing on page errors
+  *.spec.ts          end-to-end specs
 vite.config.ts       Tailwind plugin, %SITE_NAME% plugin, ports, chunk size limit
+vitest.config.ts     unit tests: src/**/*.test.ts
+playwright.config.ts desktop + mobile profiles against the production build
 tsconfig.json        app code (browser types)
-tsconfig.node.json   config files (Node types)
+tsconfig.node.json   config files and e2e/ (Node types, plus DOM for code run in the page)
 ```
 
 ## Status
