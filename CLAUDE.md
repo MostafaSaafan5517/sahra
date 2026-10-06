@@ -48,7 +48,13 @@ The project name lives only in `src/config.ts` (`SITE_NAME`). HTML pages use the
 
 The container's `data-state` records the outcome: `unsupported` (no WebGL2), `running` (first frame on screen) or `failed`. CSS reads it (the canvas fades in on `running`), and tests wait on it instead of on timers.
 
-GLSL lives in `src/scene/shaders/*.glsl`, imported as strings with Vite's `?raw` suffix.
+GLSL lives in `src/scene/shaders/*.glsl`, imported as strings with Vite's `?raw` suffix. `noise.glsl` (simplex noise from webgl-noise, MIT) is prepended to the vertex shader in `scene.ts`.
+
+## How the dunes work
+
+- Each point's `position` is not a place: it packs its layout (place along its line, which line, a fixed random number), built once by `createDuneGeometry` in `dunes.ts` with a seeded random generator, so the sand is laid out the same on every visit. Lines are stored farthest first, so nearer sand draws over farther sand.
+- The vertex shader computes everything else, every frame: line depth (evenly spaced in inverse depth, so evenly spaced on screen), line width (the view's width at that depth, from `uAspect`), the downwind drift (wrapping at the edges), the noise flow field, the dune height (ridged noise with a warp, creeping downwind), a flatter foreground (so the nearest lines stay below the bottom edge), crest shading, point size and fading.
+- Per frame, JavaScript only updates `uTime`. Tunable values live in `src/scene/settings.ts`.
 
 ## Testing conventions
 
@@ -57,7 +63,7 @@ GLSL lives in `src/scene/shaders/*.glsl`, imported as strings with Vite's `?raw`
 - Every page gets an axe check (WCAG 2.2 AA tags plus best practices) with the scene running.
 - Motion is checked by comparing two screenshots of the canvas half a second apart, as raw bytes (`Buffer.equals`). Never `expect(buffer).toEqual(buffer)` on screenshots: when it fails, building the diff takes minutes.
 - Browser launch flags (`launchOptions`) can only be set at the top of a spec file, so a test that needs a different browser (like `e2e/no-webgl2.spec.ts`, which runs Chromium with `--disable-webgl2`) gets its own file.
-- Headless Chromium renders WebGL in software (Playwright passes `--enable-unsafe-swiftshader`), so the scene tests work on CI machines without a GPU. Scene tests take a few seconds each because of it.
+- Headless Chromium renders WebGL in software (Playwright passes `--enable-unsafe-swiftshader`), so the scene tests work on CI machines without a GPU. It is slow: measured on the dune scene, about 60 frames a second at desktop size but about 12 on the phone profile, where drawing the large near grains dominates. Two such pages at once starve each other (even the canvas fade-in stalls), so Playwright runs with one worker.
 - A new test should be seen failing once: break the code it guards, run it, restore.
 
 ## Lighthouse and CI
@@ -105,9 +111,10 @@ src/
   main.ts            entry for the home page: waits for idle, checks WebGL2, lazy-loads the scene
   style.css          Tailwind and global styles
   scene/
-    scene.ts         Three.js renderer, camera, points, render loop
-    grid.ts          the point grid's geometry (unit-tested in grid.test.ts)
-    shaders/         GLSL vertex and fragment shaders
+    scene.ts         Three.js renderer, camera, dune points, uniforms, render loop
+    dunes.ts         the points' layout and the seeded random generator (unit-tested in dunes.test.ts)
+    settings.ts      tunable values: counts, wind, flow, dune height, grain size
+    shaders/         noise.glsl, dunes.vert.glsl (all motion), dunes.frag.glsl (round soft grains)
 e2e/
   test.ts            Playwright test + expect, failing on page errors
   *.spec.ts          end-to-end specs
@@ -127,4 +134,4 @@ tsconfig.node.json   config files, e2e/ and scripts/ (Node types, plus DOM for c
 
 ## Status
 
-Phase 0 (setup) done: scaffold, lazy-loaded Three.js scene, tests, CI with Lighthouse, Vercel with previews. Next: Phase 1. Phases: 0 setup, 1 scene prototype, 2 art direction, 3 performance and adaptivity, 4 content layer and booking, 5 Lab, 6 embeddable package, 7 docs and portfolio packaging. The favicon is deliberately empty (`data:,`) until the brand mark lands in Phase 4.
+Phase 0 (setup) done: scaffold, lazy-loaded Three.js scene, tests, CI with Lighthouse, Vercel with previews. Phase 1 (scene prototype) in progress on `feature/sahra-dune-scene`. Phases: 0 setup, 1 scene prototype, 2 art direction, 3 performance and adaptivity, 4 content layer and booking, 5 Lab, 6 embeddable package, 7 docs and portfolio packaging. The favicon is deliberately empty (`data:,`) until the brand mark lands in Phase 4.
