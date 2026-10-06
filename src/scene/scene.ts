@@ -97,5 +97,70 @@ export async function startScene(
   if (!animate) return;
   renderer.setAnimationLoop(render);
   // A slot is reused only after its gust has settled, so the sand never snaps back early.
-  listenForGusts(new GustTrail(camera, gusts, SCENE_SETTINGS.gustLife / MAX_GUSTS));
+  const trail = new GustTrail(camera, gusts, SCENE_SETTINGS.gustLife / MAX_GUSTS);
+  listenForGusts(trail);
+
+  if (new URLSearchParams(location.search).has("tune")) {
+    import("./tune").then(
+      ({ openTuningPanel }) => {
+        openTuningPanel(SCENE_SETTINGS, [
+          {
+            name: "windSpeed",
+            min: 0,
+            max: 2,
+            step: 0.01,
+            apply: (value) => (uniforms.uWindSpeed.value = value),
+          },
+          {
+            name: "flowStrength",
+            min: 0,
+            max: 0.6,
+            step: 0.01,
+            apply: (value) => (uniforms.uFlowStrength.value = value),
+          },
+          {
+            name: "duneHeight",
+            min: 0,
+            max: 2.5,
+            step: 0.05,
+            apply: (value) => (uniforms.uDuneHeight.value = value),
+          },
+          {
+            name: "pointSize",
+            min: 0.5,
+            max: 6,
+            step: 0.1,
+            apply: (value) => (uniforms.uPointSize.value = value),
+          },
+          {
+            name: "gustStrength",
+            min: 0,
+            max: 3,
+            step: 0.05,
+            apply: (value) => (uniforms.uGustStrength.value = value),
+          },
+          {
+            name: "gustRadius",
+            min: 0.2,
+            max: 4,
+            step: 0.05,
+            apply: (value) => (uniforms.uGustRadius.value = value),
+          },
+          {
+            name: "gustLife",
+            min: 0.6,
+            max: 6,
+            step: 0.1,
+            apply: (value) => {
+              uniforms.uGustLife.value = value;
+              trail.interval = value / MAX_GUSTS;
+            },
+          },
+        ]);
+      },
+      (error: unknown) => {
+        console.error("The tuning panel failed to load", error);
+      },
+    );
+  }
 }

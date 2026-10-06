@@ -101,6 +101,18 @@ test("blows gusts from the mouse and the finger", async ({ page, isMobile }) => 
   await expect(page.locator("[data-scene]")).toHaveAttribute("data-state", "running");
 });
 
+test("opens a tuning panel with ?tune, and only then", async ({ page }) => {
+  await page.goto("/");
+  await runningSceneCanvas(page);
+  await expect(page.getByText("Tune the scene")).toHaveCount(0);
+
+  await page.goto("/?tune");
+  await runningSceneCanvas(page);
+  await expect(page.getByText("Tune the scene")).toBeVisible();
+  await expect(page.getByText("windSpeed")).toBeVisible();
+  await expect(page.getByText("Copy values")).toBeVisible();
+});
+
 test.describe("with reduced motion", () => {
   test.use({ contextOptions: { reducedMotion: "reduce" } });
 

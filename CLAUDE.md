@@ -62,6 +62,7 @@ GLSL lives in `src/scene/shaders/*.glsl`, imported as strings with Vite's `?raw`
 - Gusts live in `GustField`: two flat `Float32Array`s that are the uniform values themselves (`uGustOrigins`, `uGustDirections`), `MAX_GUSTS` slots, the oldest replaced first. The vertex shader loops over them: each pushes nearby sand along its direction, scatters and lifts it, then lets it settle over the gust's life.
 - `GustTrail` makes at most one gust per `gustLife / MAX_GUSTS` seconds, so a slot is never reused while its gust is still blowing (the sand would snap back). A stroke needs two samples for a speed; a pause over 0.25 s or a lifted finger starts a new stroke.
 - Mouse and pen use pointer events; fingers use passive touch events, which keep arriving while the browser scrolls or zooms and never block either. Listeners are attached only when the scene animates (not with reduced motion).
+- `?tune` in the URL opens a lil-gui panel (`tune.ts`, its own lazy chunk, about 8 kB gzipped) with sliders for the wind, flow, dune height, grain size and gusts, applied live to the uniforms. "Copy values" copies them as JSON for `settings.ts`. Visitors without `?tune` never download it.
 - To see gusts while developing, use a real browser window or a headless script: the in-app preview pane, when hidden, pauses animation frames and throttles timers, so synthetic pointer events there arrive seconds apart and never form a stroke.
 
 ## Testing conventions
@@ -123,6 +124,7 @@ src/
     scene.ts         Three.js renderer, dune points, uniforms, render loop, input wiring
     camera.ts        the camera and the near and far depths (shared with the tests)
     wind.ts          gusts: GustField (uniform arrays), groundPoint, GustTrail, listeners (wind.test.ts)
+    tune.ts          the ?tune panel (lil-gui), loaded only with that flag
     dunes.ts         the points' layout and the seeded random generator (unit-tested in dunes.test.ts)
     settings.ts      tunable values: counts, wind, flow, dune height, grain size, gusts
     shaders/         noise.glsl, dunes.vert.glsl (all motion), dunes.frag.glsl (round soft grains)
