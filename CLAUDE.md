@@ -62,7 +62,7 @@ GLSL lives in `src/scene/shaders/*.glsl`, imported as strings with Vite's `?raw`
 
 ## Lighthouse and CI
 
-- `pnpm lighthouse` (after `pnpm build`) runs Lighthouse CI three times on the mobile preset against `dist/`, served by Lighthouse CI's own static server (gzip, like Vercel). It fails when the median run scores below Performance 90 or Accessibility, Best Practices, SEO 95, or shifts layout more than 0.01. Reports land in `.lighthouseci/` (open the `.html` files).
+- `pnpm lighthouse` (after `pnpm build`) runs Lighthouse CI five times on the mobile preset against `dist/`, served by Lighthouse CI's own static server (gzip, like Vercel). It fails when the median run (which absorbs up to two slow, cold runs) scores below Performance 90 or Accessibility, Best Practices, SEO 95, or shifts layout more than 0.01. Reports land in `.lighthouseci/` (open the `.html` files).
 - Lighthouse launches its own Chrome, which has no GPU in CI. `--enable-unsafe-swiftshader` in `lighthouserc.json` gives it software WebGL, and `scripts/check-lighthouse-scene.ts` fails the run unless the scene chunk was downloaded in every run. Without that guard, a Chrome without WebGL would never load Three.js and the scores would flatter the page.
 - The metric to watch is Total Blocking Time: Lighthouse simulates a slow phone CPU (4x), and Three.js's startup shows up there.
 - GitHub Actions (`.github/workflows/ci.yml`) runs on pushes to `main` and on pull requests, in three jobs: format, lint, typecheck and unit tests; end-to-end tests; Lighthouse. Each job sets up through `.github/actions/setup` (pnpm from `packageManager`, Node from `engines.node`, frozen lockfile). Lighthouse reports are uploaded as an artifact on every run, the Playwright report on failure.
