@@ -37,6 +37,17 @@ The project name lives only in `src/config.ts` (`SITE_NAME`). HTML pages use the
 - Fonts: open-license (OFL) only, because the repo is public and the font files ship in it. Self-hosted with `@font-face`, `font-display: swap` and a metric-matched fallback so the swap causes no layout shift.
 - Config files (`vite.config.ts` and friends) import local TypeScript with an explicit `.ts` extension, which Vite's upcoming native config loader requires.
 
+## How the scene loads
+
+1. The HTML holds the content and an empty, `aria-hidden` scene container (`[data-scene]`, fixed behind the content), so the content paints with almost no JavaScript (the entry script is about 1.5 kB gzipped).
+2. `src/main.ts` waits for the `load` event and then an idle moment, so the scene never competes with the content's first paint.
+3. It creates the canvas and a WebGL2 context itself, before downloading anything. No WebGL2 means the page stays as it is and Three.js is never downloaded.
+4. Only then is `src/scene/scene.ts` imported. It is a separate chunk (Three.js, about 130 kB gzipped), and Three.js reuses that context.
+5. Shaders compile with `renderer.compileAsync` (non-blocking where the browser supports parallel shader compilation); the first frame is drawn, and only then does the canvas fade in.
+6. With `prefers-reduced-motion: reduce`, one still frame is drawn and no animation loop starts.
+
+GLSL lives in `src/scene/shaders/*.glsl`, imported as strings with Vite's `?raw` suffix.
+
 ## Dependencies
 
 - Verify a package's current version and peer ranges (`npm view <pkg> version peerDependencies`) before adding it.
@@ -59,9 +70,12 @@ pnpm format         # or format:check
 index.html           home page (content in HTML first, scripts after)
 src/
   config.ts          SITE_NAME, the single place for the project name
-  main.ts            entry for the home page
+  main.ts            entry for the home page: waits for idle, checks WebGL2, lazy-loads the scene
   style.css          Tailwind and global styles
-vite.config.ts       Tailwind plugin, %SITE_NAME% plugin, ports
+  scene/
+    scene.ts         Three.js renderer, camera, points, render loop
+    shaders/         GLSL vertex and fragment shaders
+vite.config.ts       Tailwind plugin, %SITE_NAME% plugin, ports, chunk size limit
 tsconfig.json        app code (browser types)
 tsconfig.node.json   config files (Node types)
 ```
