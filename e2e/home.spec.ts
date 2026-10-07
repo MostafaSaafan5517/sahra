@@ -3,6 +3,13 @@ import type { Page } from "@playwright/test";
 import { SITE_NAME } from "../src/config.ts";
 import { expect, test } from "./test";
 
+/**
+ * The scene locked at its lightest tier. Headless Chromium draws WebGL in software, where the
+ * adaptive scene rightly gives up for the poster after a few seconds; tests about the running
+ * scene lock the tier so they do not race that.
+ */
+const STEADY_SCENE = "/?quality=minimal";
+
 /** Waits until the scene has drawn its first frame and finished fading in. */
 async function runningSceneCanvas(page: Page) {
   await expect(page.locator("[data-scene]")).toHaveAttribute("data-state", "running");
@@ -70,7 +77,7 @@ test("shows the poster at once, picked for the screen's shape", async ({ page, i
 });
 
 test("has no accessibility violations with the scene running", async ({ page }) => {
-  await page.goto("/");
+  await page.goto(STEADY_SCENE);
   await runningSceneCanvas(page);
   const { violations } = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"])
@@ -101,12 +108,12 @@ test("downloads the scene only after the page has loaded, and hides it from scre
 });
 
 test("animates the scene", async ({ page }) => {
-  await page.goto("/");
+  await page.goto(STEADY_SCENE);
   expect(await sceneMoves(page), "the scene moves").toBe(true);
 });
 
 test("blows gusts from the mouse and the finger", async ({ page, isMobile }) => {
-  await page.goto("/");
+  await page.goto(STEADY_SCENE);
   await runningSceneCanvas(page);
   await sweepAcrossTheSand(page, isMobile);
   await page.waitForTimeout(300);
@@ -114,11 +121,11 @@ test("blows gusts from the mouse and the finger", async ({ page, isMobile }) => 
 });
 
 test("opens a tuning panel with ?tune, and only then", async ({ page }) => {
-  await page.goto("/");
+  await page.goto(STEADY_SCENE);
   await runningSceneCanvas(page);
   await expect(page.getByText("Tune the scene")).toHaveCount(0);
 
-  await page.goto("/?tune");
+  await page.goto(`${STEADY_SCENE}&tune`);
   await runningSceneCanvas(page);
   await expect(page.getByText("Tune the scene")).toBeVisible();
   await expect(page.getByText("windSpeed")).toBeVisible();
@@ -138,8 +145,14 @@ test("shows the frame rate and the quality with ?debug, and only then", async ({
   await expect(page.getByText(/\d+\.\d fps/)).toBeVisible({ timeout: 10_000 });
 });
 
+test("locks the quality with ?quality, for recordings and comparisons", async ({ page }) => {
+  await page.goto("/?quality=high&debug");
+  await runningSceneCanvas(page);
+  await expect(page.getByText(/quality high: 49,152 grains/)).toBeVisible();
+});
+
 test("pauses while the tab is hidden, and carries on when it is shown again", async ({ page }) => {
-  await page.goto("/");
+  await page.goto(STEADY_SCENE);
   await runningSceneCanvas(page);
   const setVisibility = (state: "hidden" | "visible") =>
     page.evaluate((visibility) => {

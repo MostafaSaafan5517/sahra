@@ -35,6 +35,8 @@ export class FrameMonitor {
   private frames: Frame[] = [];
   private lastTime: number | null = null;
   private judgingFrom = Infinity;
+  /** The window behind the last verdict, still reported after the restart that follows it. */
+  private lastVerdictStats: FrameStats = { fps: 0, slowFrameMs: 0 };
 
   constructor(options: FrameMonitorOptions = DEFAULT_FRAME_MONITOR_OPTIONS) {
     this.options = options;
@@ -65,16 +67,21 @@ export class FrameMonitor {
     }
     // Judge only a full window of frames.
     if (timeMs - this.judgingFrom < this.options.windowMs) return false;
-    if (this.stats().slowFrameMs <= budgetMs) return false;
+    const stats = this.stats();
+    if (stats.slowFrameMs <= budgetMs) return false;
+    this.lastVerdictStats = stats;
     this.restart(timeMs);
     this.lastTime = timeMs;
     return true;
   }
 
-  /** The frame rate and slow-frame time over the current window (zeros before there is one). */
+  /**
+   * The frame rate and slow-frame time over the current window; before a new window has frames,
+   * the window behind the last verdict (zeros if there was none).
+   */
   stats(): FrameStats {
     const count = this.frames.length;
-    if (count === 0) return { fps: 0, slowFrameMs: 0 };
+    if (count === 0) return this.lastVerdictStats;
     const durations = this.frames.map((frame) => frame.duration).sort((a, b) => a - b);
     const total = durations.reduce((sum, duration) => sum + duration, 0);
     return {

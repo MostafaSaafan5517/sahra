@@ -88,6 +88,12 @@ describe("FrameMonitor", () => {
     expect(slowFrameMs).toBeCloseTo(20, 5);
   });
 
+  it("still reports the slow window after its verdict, until new frames come in", () => {
+    const monitor = started();
+    expect(run(monitor, 0, 2600, 1000 / 30)).toHaveLength(1);
+    expect(monitor.stats().fps).toBeCloseTo(30, 0);
+  });
+
   it("reports zeros before it has judged anything", () => {
     expect(new FrameMonitor().stats()).toEqual({ fps: 0, slowFrameMs: 0 });
   });
