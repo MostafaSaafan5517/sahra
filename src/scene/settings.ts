@@ -20,5 +20,11 @@ export const SCENE_SETTINGS = {
   /** Seconds for the light to go from dawn through midday and dusk back to dawn. */
   cycleSeconds: 180,
   /** Where in that cycle a visit starts: 0 dawn, 1/3 midday, 2/3 dusk. */
-  startPhase: 0.08,
+  startPhase: 0.62,
+  /**
+   * The scene's clock reads this many seconds when a visit starts, so every visit's first frame is
+   * the same picture: the poster (`pnpm poster` captures it). Change it, or anything else that
+   * changes the first frame, and capture the poster again.
+   */
+  startTime: 12,
 };

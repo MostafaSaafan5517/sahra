@@ -48,6 +48,11 @@ export async function startScene(
   const gusts = new GustField();
   const light = lightAt(SCENE_SETTINGS.startPhase);
 
+  // The scene's clock, in seconds: starts at `startTime` with the first frame, then follows
+  // performance.now(). Animation frames and pointer events both read it.
+  let clockOrigin = performance.now();
+  const sceneSeconds = (nowMs: number) => SCENE_SETTINGS.startTime + (nowMs - clockOrigin) / 1000;
+
   // Shared by the sky and the dunes; colours are display (sRGB) values the shaders write out as is.
   const time = { value: 0 };
   const horizon = { value: new Vector3() };
@@ -131,13 +136,14 @@ export async function startScene(
   resize();
   new ResizeObserver(resize).observe(canvas);
 
-  // The light cycle: phase = phaseStart + seconds / cycleSeconds, wrapped by lightAt.
+  // The light cycle: phase = phaseStart + seconds / cycleSeconds, wrapped by lightAt. At the
+  // clock's start it is `startPhase`.
   let cycleSeconds = SCENE_SETTINGS.cycleSeconds;
-  let phaseStart = SCENE_SETTINGS.startPhase - performance.now() / 1000 / cycleSeconds;
+  let phaseStart = SCENE_SETTINGS.startPhase - SCENE_SETTINGS.startTime / cycleSeconds;
   const phaseAt = (seconds: number) => phaseStart + seconds / cycleSeconds;
 
   function render(timeMs: number): void {
-    const seconds = timeMs / 1000;
+    const seconds = sceneSeconds(timeMs);
     time.value = seconds;
     lightAt(phaseAt(seconds), light);
     duneUniforms.uSandLit.value.fromArray(light.sandLit);
@@ -151,12 +157,13 @@ export async function startScene(
 
   // Compiles the shaders without blocking the main thread where the browser supports it.
   await renderer.compileAsync(scene, camera);
-  render(performance.now());
+  clockOrigin = performance.now();
+  render(clockOrigin);
   if (!animate) return;
   renderer.setAnimationLoop(render);
   // A slot is reused only after its gust has settled, so the sand never snaps back early.
   const trail = new GustTrail(camera, gusts, SCENE_SETTINGS.gustLife / MAX_GUSTS);
-  listenForGusts(trail);
+  listenForGusts(trail, () => sceneSeconds(performance.now()));
 
   if (!new URLSearchParams(location.search).has("tune")) return;
   const uniformTunable = (
@@ -166,7 +173,7 @@ export async function startScene(
     step: number,
     uniform: { value: number },
   ): Tunable => ({ name, min, max, step, apply: (value) => (uniform.value = value) });
-  const nowSeconds = () => performance.now() / 1000;
+  const nowSeconds = () => sceneSeconds(performance.now());
   const tunables: Tunable[] = [
     uniformTunable("windSpeed", 0, 2, 0.01, duneUniforms.uWindSpeed),
     uniformTunable("flowStrength", 0, 0.6, 0.01, duneUniforms.uFlowStrength),

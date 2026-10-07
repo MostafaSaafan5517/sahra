@@ -20,7 +20,7 @@ export interface Gust {
   directionZ: number;
   /** 0..1, from the pointer's speed. */
   strength: number;
-  /** In seconds, on the same clock as the shader's `uTime`. */
+  /** In seconds, on the scene's clock (the shader's `uTime`). */
   startTime: number;
 }
 
@@ -130,8 +130,7 @@ export class GustTrail {
  * rather than pointer events: touch events keep arriving while the browser scrolls or zooms, and
  * passive listeners never block either, so the page's own touch behaviour is untouched.
  */
-export function listenForGusts(trail: GustTrail): void {
-  const seconds = () => performance.now() / 1000;
+export function listenForGusts(trail: GustTrail, seconds: () => number): void {
   addEventListener(
     "pointermove",
     (event) => {
