@@ -4,9 +4,10 @@ Sahra's targets come from its brief: a steady 60 frames a second on a mid-range 
 
 ## How it stays fast
 
-- **Text first, scene after.** The HTML carries the text and a poster of the scene's first frame. Three.js (about 136 kB gzipped) downloads only after the page has loaded and the browser is idle, and only if WebGL2 works.
+- **Text first, scene after.** The HTML carries the text and a poster of the scene's first frame. Three.js (about 134 kB gzipped) downloads only after the page has loaded and the browser is idle, and only if the browser can draw WebGL2 on a GPU. Without one (WebGL only in software, as on CI machines and some locked-down computers), the poster stays: drawing in software would make the whole page sluggish.
+- **Startup in short steps.** Creating the renderer, building the grains and compiling the shaders run as separate tasks, so the browser can respond in between.
 - **All motion on the GPU.** Each grain's position is computed in the vertex shader every frame. Per frame, JavaScript sets a handful of uniforms (time, light, gusts) and draws two objects: the sky and the sand.
-- **Quality that fits the device.** Four tiers, from 49,152 grains at up to pixel ratio 2 down to 9,216 grains at pixel ratio 0.75. The starting tier comes from the device (cores, memory, phone or desktop, software rendering). A frame-rate monitor then steps down a tier when the slowest quarter of frames takes longer than 22 ms. At the lightest tier, the scene gives up for the poster below about 25 fps with a GPU, or below about 45 fps without one (software rendering also costs the page's own main thread).
+- **Quality that fits the device.** Four tiers, from 49,152 grains at up to pixel ratio 2 down to 9,216 grains at pixel ratio 0.75. The starting tier comes from the device (cores, memory, phone or desktop, software rendering). A frame-rate monitor then steps down a tier when the slowest quarter of frames takes longer than 22 ms. At the lightest tier, the scene gives up for the poster below about 25 fps.
 - **Rest when unseen.** Rendering stops while the tab is hidden or the canvas is off screen, and the scene's clock stands still meanwhile. Stopping releases the GPU's memory at once.
 - **Long caching.** Every script, style and poster has a content hash in its name and is cached for a year.
 
@@ -25,24 +26,25 @@ Measured on 2026-10-07 with the `?debug` overlay, which shows the frame rate ove
 
 ## Without a GPU
 
-Headless Chromium in tests and CI draws WebGL in software (SwiftShader). The scene recognises the renderer and starts at the lightest tier: about 60 fps for a phone-sized page and 44 to 47 fps for a 1280 x 720 page, where frames alternate between 16.7 and 33.3 ms. With software rendering that is below the scene's budget, so after its first judgement (about 2.5 s) it fades back to the poster. End-to-end tests about the running scene lock the tier with `?quality=minimal` so they do not race that.
+Browsers without a GPU can still offer WebGL, drawn in software (Chrome's SwiftShader). Measured before the page stopped running the scene there: the lightest tier managed about 45 to 60 fps in headless Chromium, but every frame also cost the page's own main thread about 60 ms on CI's simulated slow phone, so the whole page got sluggish. Since then the page asks for WebGL with `failIfMajorPerformanceCaveat` (and checks the renderer's name), and without a GPU it keeps the poster and never downloads Three.js. `?quality=...` in the URL runs the scene anyway; the end-to-end tests use it, because headless Chromium has only software WebGL.
 
 ## Lighthouse
 
-The CI gate runs Lighthouse five times on the mobile preset (a simulated mid-range phone with a 4x slower CPU and a slow 4G connection) against the production build, and fails when the median of the five values misses a budget. CI machines have no GPU, so this measures the software-rendering path described above, including the scene's download and startup; a separate check fails the job unless the scene actually loaded in every run.
+The CI gate runs Lighthouse five times on the mobile preset (a simulated mid-range phone with a 4x slower CPU and a slow 4G connection) against the production build, and fails when the median of the five values misses a budget. CI machines have no GPU, so CI measures what a visitor without one gets: the text and the poster. A check confirms every run measured exactly that, and size budgets on the built files (`pnpm size`) keep the scene's weight in check, since CI's Lighthouse never downloads it. The live scene is measured where there is a GPU.
 
-Measured on 2026-10-07 (commit 27b373d), five runs each, Performance score per run:
+Measured on 2026-10-07, five runs each, Performance score per run:
 
-| Where                        | Rendering              | Performance per run | Median | Accessibility, Best Practices, SEO | Layout shift |
-| ---------------------------- | ---------------------- | ------------------- | ------ | ---------------------------------- | ------------ |
-| GitHub Actions (the CI gate) | software (no GPU)      | 73, 93, 92, 92, 91  | 92     | 100 in every run                   | 0            |
-| The 2015 laptop above        | Intel HD Graphics 4600 | 95, 93, 90, 98, 84  | 93     | 100 in every run                   | 0            |
+| Where                                          | What it measures                        | Performance per run    | Median | Accessibility, Best Practices, SEO | Layout shift |
+| ---------------------------------------------- | --------------------------------------- | ---------------------- | ------ | ---------------------------------- | ------------ |
+| GitHub Actions (the CI gate), commit cd6486f   | the poster path (no GPU)                | 77, 100, 100, 100, 100 | 100    | 100 in every run                   | 0            |
+| The 2015 laptop above, after the startup split | the live scene (Intel HD Graphics 4600) | 90, 100, 100, 98, 95   | 98     | 100 in every run                   | 0            |
 
-In CI, the median run's largest paint is the heading at about 2.0 s, and its Total Blocking Time is 323 ms. The first CI run is usually the slowest (a cold machine), which is why the gate takes the median of five.
+The low first CI run is the usual cold machine: most of its blocking time is Lighthouse's own injected script, not the page. On the laptop, the median Total Blocking Time is 79 ms and the scene's longest task about 90 to 120 ms in Lighthouse's simulated slow phone.
+
+Before the poster path, CI measured the scene drawn in software, with a gate that swung between 85 and 92 depending on how fast the CI machine happened to be; the earlier aggregation (`median-run`, which picks a run by its first paint and time to interactive, not by score) even let a build with scores of 77, 77, 78, 89 and 93 through.
 
 ## Known costs, and the next levers
 
-- **Scene startup.** Loading Three.js, creating the renderer and compiling the shaders shows up as one long task of about 570 ms in CI's simulated slow phone (about 140 ms of real work, multiplied by Lighthouse's 4x CPU slowdown). It is the largest single item in Total Blocking Time. The lever: split the startup into several shorter tasks, yielding to the browser between them.
-- **The poster's bytes.** On Lighthouse's simulated slow 4G, the poster's download (84 kB for phones) competes with the text's first paint, moving the largest paint from about 1.0 s to about 2.0 s, still inside the 2.5 s "good" line. The poster loads with low priority, but the simulation counts its bytes anyway. The lever: a tiny inline blurred placeholder first, the full poster later.
-- **Software rendering before it gives up.** Without a GPU, the scene's frames cost about 60 ms each of simulated main-thread time until the monitor's first judgement (about 2.5 s), when it fades back to the poster.
+- **Scene startup.** Measured with the GPU and Chrome's CPU throttled 4 times: creating the renderer, building the grains and starting the shader compile used to run as one task of 226 to 273 ms. Split into separate tasks, the longest is now 93 to 107 ms, and the blocking time beyond 50 ms per task fell from about 230 to 270 ms to about 80 to 140 ms in warm runs. A cold first visit is still about 260 ms, mostly the browser compiling the shaders. What remains in one piece is evaluating Three.js itself when its file arrives.
+- **The poster's bytes.** On a simulated slow 4G connection the phone poster (82 kB) can compete with the text's first paint. It loads with low priority, and in CI's runs the largest paint (the heading) landed at about 0.9 s. If it ever matters, the lever is a tiny inline blurred placeholder first, the full poster later.
 - **Fill rate.** On GPUs the main cost is drawing pixels (large, soft near grains and the full-screen sky), not the vertex shader. That is why each lower tier lowers the pixel ratio as well as the grain count.

@@ -49,6 +49,16 @@ interface SceneOptions {
   onStateChange: (state: SceneState) => void;
 }
 
+/**
+ * Ends the current task, so the browser can respond to input and paint before the next step.
+ * Startup is split this way into several short tasks instead of one long one.
+ */
+function nextTask(): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+}
+
 export interface SceneHandle {
   /** Stops for good and releases everything: listeners, observers and the GPU's memory. */
   stop: () => void;
@@ -66,6 +76,7 @@ export async function startScene(
 ): Promise<SceneHandle> {
   const renderer = new WebGLRenderer({ canvas, context });
   renderer.setClearColor(BACKGROUND);
+  await nextTask();
 
   const camera = createCamera(1);
   const gusts = new GustField();
@@ -173,6 +184,7 @@ export async function startScene(
   applyTier();
   const resizeObserver = new ResizeObserver(resize);
   resizeObserver.observe(canvas);
+  await nextTask();
 
   // The light cycle: phase = phaseStart + seconds / cycleSeconds, wrapped by lightAt. At the
   // clock's start it is `startPhase`.
