@@ -15,8 +15,35 @@
     <script type="module" src="/src/main.ts"></script>
   </head>
   <body class="bg-neutral-950 text-neutral-100 antialiased">
-    <!-- Decorative: the scene's canvas is added here after the page has loaded. -->
-    <div data-scene class="group fixed inset-0" aria-hidden="true"></div>
+    <!--
+      Decorative. The poster is the scene's first frame (pnpm poster), shown at once; the live
+      scene's canvas is added on top after the page has loaded and fades in over it.
+    -->
+    <div data-scene class="group fixed inset-0" aria-hidden="true">
+      <picture>
+        <source
+          media="(max-aspect-ratio: 1/1)"
+          type="image/webp"
+          srcset="
+            /src/poster/poster-portrait-430.webp 430w,
+            /src/poster/poster-portrait-860.webp 860w
+          "
+          sizes="100vw"
+        />
+        <img
+          src="/src/poster/poster-landscape-1440.webp"
+          srcset="
+            /src/poster/poster-landscape-1440.webp 1440w,
+            /src/poster/poster-landscape-2048.webp 2048w,
+            /src/poster/poster-landscape-2880.webp 2880w
+          "
+          sizes="100vw"
+          alt=""
+          fetchpriority="low"
+          class="absolute inset-0 size-full object-cover"
+        />
+      </picture>
+    </div>
     <main class="relative mx-auto flex min-h-dvh max-w-3xl flex-col justify-center gap-4 px-6">
       <h1 class="text-5xl font-semibold tracking-tight">%SITE_NAME%</h1>
       <p class="text-lg text-neutral-300">A generative desert scene is on its way.</p>

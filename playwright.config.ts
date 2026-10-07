@@ -5,6 +5,10 @@ const PORT = 3301;
 export default defineConfig({
   testDir: "e2e",
   fullyParallel: true,
+  // Headless Chromium draws WebGL on the CPU (SwiftShader), where a phone-sized page renders the
+  // scene at about 12 frames a second. Two such pages at once starve each other (even the canvas
+  // fade-in stalls), so the scene tests run one at a time.
+  workers: 1,
   forbidOnly: !!process.env.CI,
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
   use: {

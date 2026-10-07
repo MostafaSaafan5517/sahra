@@ -41,14 +41,56 @@ The project name lives only in `src/config.ts` (`SITE_NAME`). HTML pages use the
 
 1. The HTML holds the content and an empty, `aria-hidden` scene container (`[data-scene]`, fixed behind the content), so the content paints with almost no JavaScript (the entry script is about 1.5 kB gzipped).
 2. `src/main.ts` waits for the `load` event and then an idle moment, so the scene never competes with the content's first paint.
-3. It creates the canvas and a WebGL2 context itself, before downloading anything. No WebGL2 means the page stays as it is and Three.js is never downloaded.
+3. It creates the canvas and a WebGL2 context itself, before downloading anything, asking with `failIfMajorPerformanceCaveat` (and checking the renderer's name too). No WebGL2 (`unsupported`) or WebGL only in software (`low-power`: no GPU, so SwiftShader and the like; slow, and it makes the whole page sluggish) means the poster stays and Three.js is never downloaded. `?quality` in the URL (any value) asks for the scene anyway.
 4. Only then is `src/scene/scene.ts` imported. It is a separate chunk (Three.js, about 130 kB gzipped), and Three.js reuses that context.
-5. Shaders compile with `renderer.compileAsync` (non-blocking where the browser supports parallel shader compilation); the first frame is drawn, and only then does the canvas fade in.
+5. Startup runs in short tasks (`nextTask()` between creating the renderer, building the grains and compiling), so the browser can respond in between. Shaders compile with `renderer.compileAsync` (non-blocking where the browser supports parallel shader compilation); the first frame is drawn, and only then does the canvas fade in.
 6. With `prefers-reduced-motion: reduce`, one still frame is drawn and no animation loop starts.
 
-The container's `data-state` records the outcome: `unsupported` (no WebGL2), `running` (first frame on screen) or `failed`. CSS reads it (the canvas fades in on `running`), and tests wait on it instead of on timers.
+The container's `data-state` records the scene's state: `unsupported` (no WebGL2), `running` (on screen), `failed` (could not start), `lost` (the browser took WebGL away for now; Three.js restores itself and the state returns to `running`) or `low-power` (too slow even at the lightest quality). CSS shows the canvas only while `running`, so in every other state the poster beneath it shows. Tests wait on the state instead of on timers.
 
-GLSL lives in `src/scene/shaders/*.glsl`, imported as strings with Vite's `?raw` suffix.
+## Adaptive quality, pausing and cleanup
+
+- `quality.ts` defines four tiers, `high`, `medium`, `low` and `minimal`, each with fewer grains (lines times points per line) and a lower pixel-ratio cap. `initialTier` picks the starting one from the device: a software WebGL renderer (SwiftShader, llvmpipe) starts at `minimal`; data saver, two cores or two GB of memory at `low`; desktops with four cores or more at `high`; phones by memory and cores (Safari reports no memory: treated as 4 GB, so `medium`).
+- `frame-monitor.ts` judges the frame rate: after a one-second warmup it looks at a 1.5 s window, and when the 75th-percentile frame takes longer than the budget it is given, it says so and starts over. Above 22 ms (below about 45 fps) the scene steps down one tier (new geometry, new pixel ratio). It never steps up: no flip-flopping. At `minimal` the budget is 40 ms (below about 25 fps), because giving up for the poster is a much bigger step than a lighter tier. (Software-only WebGL never gets here: `main.ts` shows the poster instead, unless `?quality` asks for the scene.) A slow verdict at `minimal` freezes the scene and reports `low-power`; `main.ts` lets the canvas fade out to the poster, then calls `stop()` and removes the canvas.
+- The loop runs only when it is worth it: not with reduced motion, not while the tab is hidden (`visibilitychange`), not while the canvas is off screen (IntersectionObserver; matters for embeds), not while WebGL is lost, not after `low-power` or `stop()`. The scene's clock stands still while paused, so it resumes where it left off, and the monitor restarts on resume (it has no pause logic of its own, so any long gap it sees is a slow frame).
+- `?quality=high|medium|low|minimal` locks the tier and turns adaptation off (no stepping down, no giving up): for screen recordings and comparing tiers by eye. `?quality=auto` keeps the automatic tiers. Any `?quality` also runs the scene on software-only WebGL. Headless Chromium has only software WebGL, so on the plain URL the end-to-end tests see the poster (one test checks exactly that); tests about the running scene use `STEADY_SCENE` (`/?quality=minimal`), tests about adaptation `ADAPTIVE_SCENE` (`/?quality=auto`).
+- `?debug` opens an overlay (`debug.ts`, its own lazy chunk) with the frame rate, the slowest quarter of frames, the tier, grains, pixel ratio, canvas size, state and renderer, updated every second. It is how the real-device numbers in `docs/performance.md` are measured.
+- `stop()` removes every listener and observer, disposes geometries and materials, disposes the renderer and calls `WEBGL_lose_context` to free GPU memory at once.
+- Tests: `quality.test.ts` and `frame-monitor.test.ts` cover the rules; end-to-end tests cover pausing on a hidden tab and the fallback (Chrome's CPU throttled 30 times through the DevTools protocol). Headless Chromium reports SwiftShader, so the end-to-end tests run at `minimal`.
+
+GLSL lives in `src/scene/shaders/*.glsl`, imported as strings with Vite's `?raw` suffix. `noise.glsl` (simplex noise from webgl-noise, MIT) is prepended to the vertex shader in `scene.ts`.
+
+## How the dunes work
+
+- Each point's `position` is not a place: it packs its layout (place along its line, which line, a fixed random number), built once by `createDuneGeometry` in `dunes.ts` with a seeded random generator, so the sand is laid out the same on every visit. Lines are stored farthest first, so nearer sand draws over farther sand.
+- The vertex shader computes everything else, every frame: line depth (evenly spaced in inverse depth, so evenly spaced on screen), line width (the view's width at that depth, from `uAspect`), the downwind drift (wrapping at the edges), the noise flow field, the dune height (ridged noise with a warp, creeping downwind), a flatter foreground (so the nearest lines stay below the bottom edge), sun shading, point size, haze and fading.
+- Per frame, JavaScript only updates a few uniforms (time and the light). Tunable values live in `src/scene/settings.ts`; grain counts come from the quality tier.
+
+## How the light works
+
+- `lighting.ts` holds three keyframes, `DAWN`, `MIDDAY` and `DUSK` (sky top, horizon glow, ground, lit sand, shaded sand, sun direction), and `lightAt(phase)`, which eases between them: 0 dawn, 1/3 midday, 2/3 dusk, 1 dawn again. It writes into an existing object, so the render loop allocates nothing.
+- Each frame, `scene.ts` computes the phase (`startPhase` plus elapsed time over `cycleSeconds`, 180 s by default), gets the light and copies it into uniforms; the shaders do the rest. Colours are display (sRGB) values that the shaders write out unchanged.
+- The sky is a full-screen quad (`sky.*.glsl`) drawn before the dunes: the horizon glow fades up into the dark sky and lingers down as haze behind the far dunes; a low sun adds a bloom on its side (left at dawn, right at dusk); a faint per-frame grain also dithers the dark gradients against banding.
+- The dunes are lit by the sun: one extra height sample gives each grain's slope, and faces toward the sun take the lit colour, the rest the shade colour. Far sand fades into the horizon colour; the nearest grains are drawn softer.
+- Readability is a test, not a judgement: `lighting.test.ts` checks the page's text colours against the sky, the horizon (with the sun bloom, `SUN_GLOW`) and the ground at 300 points of the cycle, all at least 4.5:1. Sand grains behind the text are a Phase 4 concern (dimming the sand under the text).
+- `?tune` adds `cycleSeconds` and `startPhase` (jump to a point of the cycle) to the panel.
+
+## The poster
+
+- Every visit starts the scene's clock at `startTime` (12 s) and the light at `startPhase` (0.62, dusk), so the first frame is always the same picture. The poster is that frame, captured from the real scene by `pnpm poster` (`scripts/capture-poster.ts`): it builds and serves the site, opens it with reduced motion (one still frame), hides the text, screenshots the scene and lets the browser encode WebP (quality 0.6) into `src/poster/`.
+- **Capture the poster again whenever the first frame changes**: settings, shaders, the light, the camera. Nothing checks this automatically.
+- Two shapes, several widths: landscape (captured as a 1440 by 720 window at double resolution; 1440, 2048 and 2880 wide) and portrait for phones (430 by 932 at double resolution; 430 and 860 wide). Grains are sized in CSS pixels, so each is captured at a typical window size to look like the live scene. `index.html` picks portrait for screens taller than wide; `object-fit: cover` crops the sides, which keeps the live scene's vertical framing.
+- The `<picture>` sits in the scene container; the canvas is absolutely positioned above it and fades in over it once the first frame is drawn. Without WebGL2 (or if the scene fails), the poster simply stays.
+- It loads with `fetchpriority="low"`: it is decoration, the text is the content (and the Largest Contentful Paint). Even so, Lighthouse's simulated slow 4G counts its download alongside the first paint: locally about 2.1 s for the text's paint instead of about 1 s, scores 95 to 99. The next step if needed is a tiny inline blurred placeholder first, with the full poster loaded later. Grain is not what makes the files big (removing it changed nothing); the sharp sand grains are.
+
+## How the gusts work
+
+- `wind.ts` turns pointer and finger movement into gusts: each has a ground position (the screen point projected onto a plane at the dunes' average height; nothing in the sky), a direction, a strength from the pointer's speed, and a start time on the shader's clock (`performance.now()` seconds, like `uTime`).
+- Gusts live in `GustField`: two flat `Float32Array`s that are the uniform values themselves (`uGustOrigins`, `uGustDirections`), `MAX_GUSTS` slots, the oldest replaced first. The vertex shader loops over them: each pushes nearby sand along its direction, scatters and lifts it, then lets it settle over the gust's life.
+- `GustTrail` makes at most one gust per `gustLife / MAX_GUSTS` seconds, so a slot is never reused while its gust is still blowing (the sand would snap back). A stroke needs two samples for a speed; a pause over 0.25 s or a lifted finger starts a new stroke.
+- Mouse and pen use pointer events; fingers use passive touch events, which keep arriving while the browser scrolls or zooms and never block either. Listeners are attached only when the scene animates (not with reduced motion).
+- `?tune` in the URL opens a lil-gui panel (`tune.ts`, its own lazy chunk, about 8 kB gzipped) with sliders for the wind, flow, dune height, grain size and gusts, applied live to the uniforms. "Copy values" copies them as JSON for `settings.ts`. Visitors without `?tune` never download it.
+- To see gusts while developing, use a real browser window or a headless script: the in-app preview pane, when hidden, pauses animation frames and throttles timers, so synthetic pointer events there arrive seconds apart and never form a stroke.
 
 ## Testing conventions
 
@@ -56,14 +98,16 @@ GLSL lives in `src/scene/shaders/*.glsl`, imported as strings with Vite's `?raw`
 - **End-to-end tests (Playwright)** live in `e2e/` and run against the production build (`pnpm build && pnpm preview` on port 3301), in two profiles: `desktop` (Desktop Chrome) and `mobile` (Pixel 7: small viewport, touch). Import `test` and `expect` from `e2e/test.ts`, never from `@playwright/test`: its automatic fixture fails any test whose page logs a console error or throws.
 - Every page gets an axe check (WCAG 2.2 AA tags plus best practices) with the scene running.
 - Motion is checked by comparing two screenshots of the canvas half a second apart, as raw bytes (`Buffer.equals`). Never `expect(buffer).toEqual(buffer)` on screenshots: when it fails, building the diff takes minutes.
+- Touch drags go through the DevTools protocol (`Input.dispatchTouchEvent`), since Playwright has no touch-drag helper; `sweepAcrossTheSand` in `e2e/home.spec.ts` uses it on the phone profile and the mouse elsewhere.
 - Browser launch flags (`launchOptions`) can only be set at the top of a spec file, so a test that needs a different browser (like `e2e/no-webgl2.spec.ts`, which runs Chromium with `--disable-webgl2`) gets its own file.
-- Headless Chromium renders WebGL in software (Playwright passes `--enable-unsafe-swiftshader`), so the scene tests work on CI machines without a GPU. Scene tests take a few seconds each because of it.
+- Headless Chromium renders WebGL in software (Playwright passes `--enable-unsafe-swiftshader`), so the scene tests work on CI machines without a GPU. It is slow: measured on the dune scene, about 60 frames a second at desktop size but about 12 on the phone profile, where drawing the large near grains dominates. Two such pages at once starve each other (even the canvas fade-in stalls), so Playwright runs with one worker.
 - A new test should be seen failing once: break the code it guards, run it, restore.
 
 ## Lighthouse and CI
 
-- `pnpm lighthouse` (after `pnpm build`) runs Lighthouse CI five times on the mobile preset against `dist/`, served by Lighthouse CI's own static server (gzip, like Vercel). It fails when the median run (which absorbs up to two slow, cold runs) scores below Performance 90 or Accessibility, Best Practices, SEO 95, or shifts layout more than 0.01. Reports land in `.lighthouseci/` (open the `.html` files).
-- Lighthouse launches its own Chrome, which has no GPU in CI. `--enable-unsafe-swiftshader` in `lighthouserc.json` gives it software WebGL, and `scripts/check-lighthouse-scene.ts` fails the run unless the scene chunk was downloaded in every run. Without that guard, a Chrome without WebGL would never load Three.js and the scores would flatter the page.
+- `pnpm lighthouse` (after `pnpm build`) runs Lighthouse CI five times on the mobile preset against `dist/`, served by Lighthouse CI's own static server (gzip, like Vercel). It fails when the median of the five values (`aggregationMethod: "median"`, which absorbs up to two slow, cold runs) is below Performance 90 or Accessibility, Best Practices, SEO 95, or layout shift is above 0.01. Never use `median-run`: Lighthouse CI picks that run by its first paint and time to interactive, not by score, and it once passed a build whose scores were 77, 77, 78, 89 and 93. Reports land in `.lighthouseci/` (open the `.html` files).
+- CI machines have no GPU, so CI's Lighthouse measures what a visitor without one gets: the text and the poster, no Three.js. `scripts/check-lighthouse-path.ts` reports which page each run measured (the scene's script downloaded or not) and fails if the runs disagree or, with `LIGHTHOUSE_EXPECTS=poster` (set in CI), if any run measured the scene. The live scene's cost is measured where there is a GPU (`docs/performance.md`), and its weight is gated in CI by `pnpm size` (`scripts/check-sizes.ts`: page script, styles, the scene chunk and the posters against fixed budgets, after `pnpm build`).
+- Lighthouse's own injected script (`_lighthouse-eval.js`) sometimes shows up as a long task of up to a second or so, mostly in the first, cold run; it is noise in Total Blocking Time that the median absorbs.
 - The metric to watch is Total Blocking Time: Lighthouse simulates a slow phone CPU (4x), and Three.js's startup shows up there.
 - GitHub Actions (`.github/workflows/ci.yml`) runs on pushes to `main` and on pull requests, in three jobs: format, lint, typecheck and unit tests; end-to-end tests; Lighthouse. Each job sets up through `.github/actions/setup` (pnpm from `packageManager`, Node from `engines.node`, frozen lockfile). Lighthouse reports are uploaded as an artifact on every run, the Playwright report on failure.
 - Known variance: the first Lighthouse run on a fresh CI machine can be far slower (seen: Performance 72, Total Blocking Time 1.9 s, against 100 and about 30 ms for the warm runs). That cold run is the closest to a slow phone's first visit, so it is the number Phase 3 must bring down, not one to explain away.
@@ -92,6 +136,8 @@ pnpm format         # or format:check
 pnpm test           # unit tests (Vitest); test:watch while working
 pnpm test:e2e       # end-to-end tests (Playwright), builds and serves on 3301 first
 pnpm lighthouse     # Lighthouse CI on dist/ (run pnpm build first)
+pnpm size          # size budgets for dist/ (run pnpm build first)
+pnpm poster         # capture the poster (the scene's first frame) into src/poster/
 ```
 
 Playwright reuses a server already running on port 3301 outside CI, so stop any `pnpm preview` left running before trusting a local end-to-end run against changed code.
@@ -104,15 +150,27 @@ src/
   config.ts          SITE_NAME, the single place for the project name
   main.ts            entry for the home page: waits for idle, checks WebGL2, lazy-loads the scene
   style.css          Tailwind and global styles
+  poster/            the poster, landscape and portrait WebP at several widths (pnpm poster)
   scene/
-    scene.ts         Three.js renderer, camera, points, render loop
-    grid.ts          the point grid's geometry (unit-tested in grid.test.ts)
-    shaders/         GLSL vertex and fragment shaders
+    scene.ts         renderer, dunes, sky, uniforms, render loop, tiers, pausing, stop(), ?tune wiring
+    quality.ts       quality tiers and the starting tier from device signals (quality.test.ts)
+    frame-monitor.ts judges the frame rate for stepping quality down (frame-monitor.test.ts)
+    camera.ts        the camera and the near and far depths (shared with the tests)
+    lighting.ts      the dawn, midday and dusk keyframes, lightAt, contrastRatio (lighting.test.ts)
+    wind.ts          gusts: GustField (uniform arrays), groundPoint, GustTrail, listeners (wind.test.ts)
+    tune.ts          the ?tune panel (lil-gui), loaded only with that flag
+    debug.ts         the ?debug overlay (frame rate, quality, renderer), loaded only with that flag
+    dunes.ts         the points' layout and the seeded random generator (unit-tested in dunes.test.ts)
+    settings.ts      tunable values: wind, flow, dune height, grain size, gusts, light cycle, start
+    shaders/         noise.glsl; dunes.vert.glsl (all motion, sun shading), dunes.frag.glsl (soft
+                     grains, haze); sky.vert.glsl and sky.frag.glsl (gradient, sun bloom, grain)
 e2e/
   test.ts            Playwright test + expect, failing on page errors
   *.spec.ts          end-to-end specs
 scripts/
-  check-lighthouse-scene.ts   fails unless the scene loaded in every Lighthouse run (Node runs .ts directly)
+  check-lighthouse-path.ts    which page Lighthouse measured (scene or poster); fails on a mix or a mismatch
+  check-sizes.ts              size budgets for the built files (pnpm size)
+  capture-poster.ts           captures the poster from the real scene (pnpm poster)
 .github/
   workflows/ci.yml   checks, end-to-end and Lighthouse jobs
   actions/setup/     shared pnpm + Node + install steps
@@ -127,4 +185,4 @@ tsconfig.node.json   config files, e2e/ and scripts/ (Node types, plus DOM for c
 
 ## Status
 
-Phase 0 (setup) done: scaffold, lazy-loaded Three.js scene, tests, CI with Lighthouse, Vercel with previews. Next: Phase 1. Phases: 0 setup, 1 scene prototype, 2 art direction, 3 performance and adaptivity, 4 content layer and booking, 5 Lab, 6 embeddable package, 7 docs and portfolio packaging. The favicon is deliberately empty (`data:,`) until the brand mark lands in Phase 4.
+Phase 0 (setup) done: scaffold, lazy-loaded Three.js scene, tests, CI with Lighthouse, Vercel with previews. Phases 1 (scene prototype), 2 (art direction, poster) and 3 (performance and adaptivity; measurements in `docs/performance.md`) built on `feature/sahra-dune-scene` (PR #2); the Lighthouse gate passes on CI (median Performance 92). Production keeps the Phase 0 placeholder until PR #2 is merged. Phases: 0 setup, 1 scene prototype, 2 art direction, 3 performance and adaptivity, 4 content layer and booking, 5 Lab, 6 embeddable package, 7 docs and portfolio packaging. The favicon is deliberately empty (`data:,`) until the brand mark lands in Phase 4.

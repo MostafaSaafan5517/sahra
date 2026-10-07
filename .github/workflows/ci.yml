@@ -51,9 +51,15 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
       - run: pnpm build
-      # Five mobile runs against dist/; fails below the score budgets in lighthouserc.json,
-      # or if the scene did not load in every run.
+      # The page's files against their size budgets, the scene's included: Lighthouse below
+      # never downloads the scene on this GPU-less machine.
+      - run: pnpm size
+      # Five mobile runs against dist/; fails below the score budgets in lighthouserc.json.
+      # Without a GPU the page shows the poster instead of the scene: the runs must have
+      # measured exactly that.
       - run: pnpm lighthouse
+        env:
+          LIGHTHOUSE_EXPECTS: poster
       - uses: actions/upload-artifact@v7
         if: always()
         with:

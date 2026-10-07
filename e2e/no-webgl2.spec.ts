@@ -15,3 +15,14 @@ test("keeps the content and never downloads Three.js", async ({ page }) => {
   await expect(page.locator("[data-scene] canvas")).toHaveCount(0);
   expect(sceneRequests).toEqual([]);
 });
+
+test("keeps showing the poster in place of the scene", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator("[data-scene]")).toHaveAttribute("data-state", "unsupported");
+  const poster = page.locator("[data-scene] img");
+  await expect(poster).toBeVisible();
+  expect(
+    await poster.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0),
+    "the poster has loaded",
+  ).toBe(true);
+});

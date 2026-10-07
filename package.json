@@ -14,7 +14,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "lighthouse": "lhci collect && node scripts/check-lighthouse-scene.ts && lhci assert && lhci upload"
+    "lighthouse": "lhci collect && node scripts/check-lighthouse-path.ts && lhci assert && lhci upload",
+    "size": "node scripts/check-sizes.ts",
+    "poster": "node scripts/capture-poster.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
@@ -40,6 +42,7 @@
   },
   "packageManager": "pnpm@11.13.1",
   "dependencies": {
+    "lil-gui": "^0.21.0",
     "three": "^0.186.1"
   }
 }
