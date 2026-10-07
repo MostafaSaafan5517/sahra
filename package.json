@@ -14,7 +14,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "lighthouse": "lhci collect && node scripts/check-lighthouse-scene.ts && lhci assert && lhci upload"
+    "lighthouse": "lhci collect && node scripts/check-lighthouse-scene.ts && lhci assert && lhci upload",
+    "poster": "node scripts/capture-poster.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

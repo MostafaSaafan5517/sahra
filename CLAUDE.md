@@ -65,6 +65,14 @@ GLSL lives in `src/scene/shaders/*.glsl`, imported as strings with Vite's `?raw`
 - Readability is a test, not a judgement: `lighting.test.ts` checks the page's text colours against the sky, the horizon (with the sun bloom, `SUN_GLOW`) and the ground at 300 points of the cycle, all at least 4.5:1. Sand grains behind the text are a Phase 4 concern (dimming the sand under the text).
 - `?tune` adds `cycleSeconds` and `startPhase` (jump to a point of the cycle) to the panel.
 
+## The poster
+
+- Every visit starts the scene's clock at `startTime` (12 s) and the light at `startPhase` (0.62, dusk), so the first frame is always the same picture. The poster is that frame, captured from the real scene by `pnpm poster` (`scripts/capture-poster.ts`): it builds and serves the site, opens it with reduced motion (one still frame), hides the text, screenshots the scene and lets the browser encode WebP (quality 0.6) into `src/poster/`.
+- **Capture the poster again whenever the first frame changes**: settings, shaders, the light, the camera. Nothing checks this automatically.
+- Two shapes, several widths: landscape (captured as a 1440 by 720 window at double resolution; 1440, 2048 and 2880 wide) and portrait for phones (430 by 932 at double resolution; 430 and 860 wide). Grains are sized in CSS pixels, so each is captured at a typical window size to look like the live scene. `index.html` picks portrait for screens taller than wide; `object-fit: cover` crops the sides, which keeps the live scene's vertical framing.
+- The `<picture>` sits in the scene container; the canvas is absolutely positioned above it and fades in over it once the first frame is drawn. Without WebGL2 (or if the scene fails), the poster simply stays.
+- It loads with `fetchpriority="low"`: it is decoration, the text is the content (and the Largest Contentful Paint). Even so, Lighthouse's simulated slow 4G counts its download alongside the first paint: locally about 2.1 s for the text's paint instead of about 1 s, scores 95 to 99. The next step if needed is a tiny inline blurred placeholder first, with the full poster loaded later. Grain is not what makes the files big (removing it changed nothing); the sharp sand grains are.
+
 ## How the gusts work
 
 - `wind.ts` turns pointer and finger movement into gusts: each has a ground position (the screen point projected onto a plane at the dunes' average height; nothing in the sky), a direction, a strength from the pointer's speed, and a start time on the shader's clock (`performance.now()` seconds, like `uTime`).
@@ -117,6 +125,7 @@ pnpm format         # or format:check
 pnpm test           # unit tests (Vitest); test:watch while working
 pnpm test:e2e       # end-to-end tests (Playwright), builds and serves on 3301 first
 pnpm lighthouse     # Lighthouse CI on dist/ (run pnpm build first)
+pnpm poster         # capture the poster (the scene's first frame) into src/poster/
 ```
 
 Playwright reuses a server already running on port 3301 outside CI, so stop any `pnpm preview` left running before trusting a local end-to-end run against changed code.
@@ -129,6 +138,7 @@ src/
   config.ts          SITE_NAME, the single place for the project name
   main.ts            entry for the home page: waits for idle, checks WebGL2, lazy-loads the scene
   style.css          Tailwind and global styles
+  poster/            the poster, landscape and portrait WebP at several widths (pnpm poster)
   scene/
     scene.ts         Three.js renderer, dune points, uniforms, render loop, input wiring
     camera.ts        the camera and the near and far depths (shared with the tests)
@@ -144,6 +154,7 @@ e2e/
   *.spec.ts          end-to-end specs
 scripts/
   check-lighthouse-scene.ts   fails unless the scene loaded in every Lighthouse run (Node runs .ts directly)
+  capture-poster.ts           captures the poster from the real scene (pnpm poster)
 .github/
   workflows/ci.yml   checks, end-to-end and Lighthouse jobs
   actions/setup/     shared pnpm + Node + install steps

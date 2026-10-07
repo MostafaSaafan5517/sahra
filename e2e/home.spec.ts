@@ -57,6 +57,18 @@ test("shows the content with the site name", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1, name: SITE_NAME })).toBeVisible();
 });
 
+test("shows the poster at once, picked for the screen's shape", async ({ page, isMobile }) => {
+  await page.goto("/");
+  const poster = page.locator("[data-scene] img");
+  await expect(poster).toBeVisible();
+  const { loaded, source } = await poster.evaluate((image: HTMLImageElement) => ({
+    loaded: image.complete && image.naturalWidth > 0,
+    source: image.currentSrc,
+  }));
+  expect(loaded, "the poster has loaded").toBe(true);
+  expect(source).toContain(isMobile ? "poster-portrait" : "poster-landscape");
+});
+
 test("has no accessibility violations with the scene running", async ({ page }) => {
   await page.goto("/");
   await runningSceneCanvas(page);

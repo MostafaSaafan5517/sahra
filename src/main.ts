@@ -39,7 +39,7 @@ async function mountScene(container: HTMLElement): Promise<void> {
   }
 
   canvas.className =
-    "block size-full opacity-0 group-data-[state=running]:opacity-100 motion-safe:transition-opacity motion-safe:duration-1000";
+    "absolute inset-0 size-full opacity-0 group-data-[state=running]:opacity-100 motion-safe:transition-opacity motion-safe:duration-1000";
   container.append(canvas);
   try {
     const { startScene } = await import("./scene/scene");
