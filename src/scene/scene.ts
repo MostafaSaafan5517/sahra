@@ -14,13 +14,7 @@ import { createCamera, FAR_DEPTH, FIELD_OF_VIEW, NEAR_DEPTH } from "./camera";
 import { createDuneGeometry, seededRandom } from "./dunes";
 import { FrameMonitor } from "./frame-monitor";
 import { lightAt, SUN_GLOW } from "./lighting";
-import {
-  initialTier,
-  isSoftwareRenderer,
-  QUALITY_TIERS,
-  qualityTier,
-  readDeviceSignals,
-} from "./quality";
+import { initialTier, QUALITY_TIERS, qualityTier, readDeviceSignals } from "./quality";
 import { SCENE_SETTINGS } from "./settings";
 import fragmentShader from "./shaders/dunes.frag.glsl?raw";
 import duneVertexShader from "./shaders/dunes.vert.glsl?raw";
@@ -35,10 +29,9 @@ const BACKGROUND = 0x0a0a0a;
 const LIGHTEST_TIER = QUALITY_TIERS.length - 1;
 /**
  * Frame budgets for the 75th-percentile frame. Above 22 ms (below about 45 fps) the scene steps
- * down a tier. At the lightest tier, with a GPU, it gives up for the poster only above 40 ms
- * (below about 25 fps): a steady 45 fps scene is still far better than none, and GPU frames cost
- * the page almost nothing. Without a GPU (software WebGL) every frame also costs the page's own
- * main thread (60 to 86 ms per frame in CI's Lighthouse), so there it keeps the 22 ms budget.
+ * down a tier. At the lightest tier it gives up for the poster only above 40 ms (below about
+ * 25 fps): a steady 45 fps scene is still far better than none. (Software-only WebGL never gets
+ * this far: main.ts shows the poster instead, unless `?quality` asks for the scene.)
  */
 const STEP_DOWN_BUDGET_MS = 22;
 const GIVE_UP_BUDGET_MS = 40;
@@ -81,12 +74,11 @@ export async function startScene(
   const signals = readDeviceSignals(context);
   // ?quality=high|medium|low|minimal locks the tier: no stepping down, no giving up. For screen
   // recordings, comparing tiers by eye, and tests that need the scene to keep running.
+  // ?quality=auto (or any other value) keeps the automatic tiers. Either way, main.ts runs the
+  // scene even on software-only WebGL, where the page otherwise shows the poster.
   const lockedTier = QUALITY_TIERS.findIndex((tier) => tier.name === flags.get("quality"));
   const adaptive = lockedTier === -1;
   let tierIndex = adaptive ? initialTier(signals) : lockedTier;
-  const giveUpBudgetMs = isSoftwareRenderer(signals.renderer)
-    ? STEP_DOWN_BUDGET_MS
-    : GIVE_UP_BUDGET_MS;
 
   // The scene's clock, in seconds: starts at `startTime` with the first frame and stands still
   // while the scene is paused. Animation frames and pointer events both read it.
@@ -207,7 +199,7 @@ export async function startScene(
   let lowPower = false;
   function frame(timeMs: number): void {
     render(timeMs);
-    const budget = tierIndex < LIGHTEST_TIER ? STEP_DOWN_BUDGET_MS : giveUpBudgetMs;
+    const budget = tierIndex < LIGHTEST_TIER ? STEP_DOWN_BUDGET_MS : GIVE_UP_BUDGET_MS;
     if (!monitor.frame(timeMs, budget) || !adaptive) return;
     if (tierIndex < LIGHTEST_TIER) {
       tierIndex += 1;

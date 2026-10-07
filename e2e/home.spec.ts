@@ -4,11 +4,12 @@ import { SITE_NAME } from "../src/config.ts";
 import { expect, test } from "./test";
 
 /**
- * The scene locked at its lightest tier. Headless Chromium draws WebGL in software, where the
- * adaptive scene rightly gives up for the poster after a few seconds; tests about the running
- * scene lock the tier so they do not race that.
+ * Headless Chromium draws WebGL in software (SwiftShader), where the page shows the poster
+ * instead of the scene. `?quality` asks for the scene anyway: locked at its lightest tier for
+ * tests about the running scene, or `auto` for tests about the automatic tiers.
  */
 const STEADY_SCENE = "/?quality=minimal";
+const ADAPTIVE_SCENE = "/?quality=auto";
 
 /** Waits until the scene has drawn its first frame and finished fading in. */
 async function runningSceneCanvas(page: Page) {
@@ -76,6 +77,20 @@ test("shows the poster at once, picked for the screen's shape", async ({ page, i
   expect(source).toContain(isMobile ? "poster-portrait" : "poster-landscape");
 });
 
+test("shows the poster instead of a scene drawn in software, and never downloads Three.js", async ({
+  page,
+}) => {
+  const sceneRequests: string[] = [];
+  page.on("request", (request) => {
+    if (/\/assets\/scene-[\w-]+\.js$/.test(request.url())) sceneRequests.push(request.url());
+  });
+  await page.goto("/");
+  await expect(page.locator("[data-scene]")).toHaveAttribute("data-state", "low-power");
+  await expect(page.locator("[data-scene] img")).toBeVisible();
+  await expect(page.locator("[data-scene] canvas")).toHaveCount(0);
+  expect(sceneRequests).toEqual([]);
+});
+
 test("has no accessibility violations with the scene running", async ({ page }) => {
   await page.goto(STEADY_SCENE);
   await runningSceneCanvas(page);
@@ -90,7 +105,7 @@ test("has no accessibility violations with the scene running", async ({ page }) 
 test("downloads the scene only after the page has loaded, and hides it from screen readers", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto(STEADY_SCENE);
   await runningSceneCanvas(page);
   await expect(page.locator("[data-scene]")).toHaveAttribute("aria-hidden", "true");
 
@@ -133,11 +148,11 @@ test("opens a tuning panel with ?tune, and only then", async ({ page }) => {
 });
 
 test("shows the frame rate and the quality with ?debug, and only then", async ({ page }) => {
-  await page.goto("/");
+  await page.goto(STEADY_SCENE);
   await runningSceneCanvas(page);
   await expect(page.getByText(/fps|measuring the frame rate/)).toHaveCount(0);
 
-  await page.goto("/?debug");
+  await page.goto(`${ADAPTIVE_SCENE}&debug`);
   await runningSceneCanvas(page);
   // Headless Chromium draws WebGL in software (SwiftShader), which starts at the lightest tier.
   await expect(page.getByText(/quality minimal: 9,216 grains/)).toBeVisible();
@@ -172,7 +187,7 @@ test("pauses while the tab is hidden, and carries on when it is shown again", as
 test("falls back to the poster when the device is too slow, and releases the scene", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto(ADAPTIVE_SCENE);
   await runningSceneCanvas(page);
   // Thirty times slower: every frame now misses its budget, even at the lightest quality.
   const devtools = await page.context().newCDPSession(page);
@@ -189,7 +204,7 @@ test.describe("with reduced motion", () => {
   test.use({ contextOptions: { reducedMotion: "reduce" } });
 
   test("draws one still frame", async ({ page }) => {
-    await page.goto("/");
+    await page.goto(STEADY_SCENE);
     expect(await sceneMoves(page), "the scene moves").toBe(false);
   });
 
@@ -197,7 +212,7 @@ test.describe("with reduced motion", () => {
     page,
     isMobile,
   }) => {
-    await page.goto("/");
+    await page.goto(STEADY_SCENE);
     const canvas = await runningSceneCanvas(page);
     const before = await canvas.screenshot();
     await sweepAcrossTheSand(page, isMobile);

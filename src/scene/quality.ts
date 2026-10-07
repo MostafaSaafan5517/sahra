@@ -68,10 +68,15 @@ export function initialTier(signals: DeviceSignals): number {
   return memoryGb >= 4 ? MEDIUM : LOW;
 }
 
+/** The WebGL renderer's name (the GPU, or the software renderer), when the browser shares it. */
+export function rendererName(gl: WebGL2RenderingContext): string {
+  const info = gl.getExtension("WEBGL_debug_renderer_info");
+  const name: unknown = info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : "";
+  return typeof name === "string" ? name : "";
+}
+
 /** Reads the device signals in the browser, using the scene's own WebGL context for the renderer. */
 export function readDeviceSignals(gl: WebGL2RenderingContext): DeviceSignals {
-  const info = gl.getExtension("WEBGL_debug_renderer_info");
-  const renderer: unknown = info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : "";
   const { deviceMemory, connection } = navigator as Navigator & {
     deviceMemory?: number;
     connection?: { saveData?: boolean };
@@ -81,6 +86,6 @@ export function readDeviceSignals(gl: WebGL2RenderingContext): DeviceSignals {
     memoryGb: deviceMemory,
     touchFirst: matchMedia("(pointer: coarse)").matches,
     saveData: connection?.saveData === true,
-    renderer: typeof renderer === "string" ? renderer : "",
+    renderer: rendererName(gl),
   };
 }

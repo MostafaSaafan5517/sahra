@@ -14,7 +14,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "lighthouse": "lhci collect && node scripts/check-lighthouse-scene.ts && lhci assert && lhci upload",
+    "lighthouse": "lhci collect && node scripts/check-lighthouse-path.ts && lhci assert && lhci upload",
+    "size": "node scripts/check-sizes.ts",
     "poster": "node scripts/capture-poster.ts"
   },
   "devDependencies": {

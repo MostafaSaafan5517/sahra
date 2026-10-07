@@ -41,7 +41,7 @@ The project name lives only in `src/config.ts` (`SITE_NAME`). HTML pages use the
 
 1. The HTML holds the content and an empty, `aria-hidden` scene container (`[data-scene]`, fixed behind the content), so the content paints with almost no JavaScript (the entry script is about 1.5 kB gzipped).
 2. `src/main.ts` waits for the `load` event and then an idle moment, so the scene never competes with the content's first paint.
-3. It creates the canvas and a WebGL2 context itself, before downloading anything. No WebGL2 means the page stays as it is and Three.js is never downloaded.
+3. It creates the canvas and a WebGL2 context itself, before downloading anything, asking with `failIfMajorPerformanceCaveat` (and checking the renderer's name too). No WebGL2 (`unsupported`) or WebGL only in software (`low-power`: no GPU, so SwiftShader and the like; slow, and it makes the whole page sluggish) means the poster stays and Three.js is never downloaded. `?quality` in the URL (any value) asks for the scene anyway.
 4. Only then is `src/scene/scene.ts` imported. It is a separate chunk (Three.js, about 130 kB gzipped), and Three.js reuses that context.
 5. Shaders compile with `renderer.compileAsync` (non-blocking where the browser supports parallel shader compilation); the first frame is drawn, and only then does the canvas fade in.
 6. With `prefers-reduced-motion: reduce`, one still frame is drawn and no animation loop starts.
@@ -51,9 +51,9 @@ The container's `data-state` records the scene's state: `unsupported` (no WebGL2
 ## Adaptive quality, pausing and cleanup
 
 - `quality.ts` defines four tiers, `high`, `medium`, `low` and `minimal`, each with fewer grains (lines times points per line) and a lower pixel-ratio cap. `initialTier` picks the starting one from the device: a software WebGL renderer (SwiftShader, llvmpipe) starts at `minimal`; data saver, two cores or two GB of memory at `low`; desktops with four cores or more at `high`; phones by memory and cores (Safari reports no memory: treated as 4 GB, so `medium`).
-- `frame-monitor.ts` judges the frame rate: after a one-second warmup it looks at a 1.5 s window, and when the 75th-percentile frame takes longer than the budget it is given, it says so and starts over. Above 22 ms (below about 45 fps) the scene steps down one tier (new geometry, new pixel ratio). It never steps up: no flip-flopping. At `minimal`, with a GPU, the budget is 40 ms (below about 25 fps), because giving up for the poster is a much bigger step than a lighter tier and GPU frames cost the page almost nothing. With software WebGL (SwiftShader and the like) it stays 22 ms: there every frame also costs the page's own main thread (60 to 86 ms per frame in CI's Lighthouse), so a struggling scene makes the whole page sluggish and the poster serves the visitor better. A slow verdict at `minimal` freezes the scene and reports `low-power`; `main.ts` lets the canvas fade out to the poster, then calls `stop()` and removes the canvas.
+- `frame-monitor.ts` judges the frame rate: after a one-second warmup it looks at a 1.5 s window, and when the 75th-percentile frame takes longer than the budget it is given, it says so and starts over. Above 22 ms (below about 45 fps) the scene steps down one tier (new geometry, new pixel ratio). It never steps up: no flip-flopping. At `minimal` the budget is 40 ms (below about 25 fps), because giving up for the poster is a much bigger step than a lighter tier. (Software-only WebGL never gets here: `main.ts` shows the poster instead, unless `?quality` asks for the scene.) A slow verdict at `minimal` freezes the scene and reports `low-power`; `main.ts` lets the canvas fade out to the poster, then calls `stop()` and removes the canvas.
 - The loop runs only when it is worth it: not with reduced motion, not while the tab is hidden (`visibilitychange`), not while the canvas is off screen (IntersectionObserver; matters for embeds), not while WebGL is lost, not after `low-power` or `stop()`. The scene's clock stands still while paused, so it resumes where it left off, and the monitor restarts on resume (it has no pause logic of its own, so any long gap it sees is a slow frame).
-- `?quality=high|medium|low|minimal` locks the tier and turns adaptation off (no stepping down, no giving up): for screen recordings, comparing tiers by eye, and end-to-end tests about the running scene, which use `STEADY_SCENE` (`/?quality=minimal`) because the adaptive scene rightly gives up in headless Chromium's software WebGL after a few seconds. Tests about adaptation itself use the plain URL.
+- `?quality=high|medium|low|minimal` locks the tier and turns adaptation off (no stepping down, no giving up): for screen recordings and comparing tiers by eye. `?quality=auto` keeps the automatic tiers. Any `?quality` also runs the scene on software-only WebGL. Headless Chromium has only software WebGL, so on the plain URL the end-to-end tests see the poster (one test checks exactly that); tests about the running scene use `STEADY_SCENE` (`/?quality=minimal`), tests about adaptation `ADAPTIVE_SCENE` (`/?quality=auto`).
 - `?debug` opens an overlay (`debug.ts`, its own lazy chunk) with the frame rate, the slowest quarter of frames, the tier, grains, pixel ratio, canvas size, state and renderer, updated every second. It is how the real-device numbers in `docs/performance.md` are measured.
 - `stop()` removes every listener and observer, disposes geometries and materials, disposes the renderer and calls `WEBGL_lose_context` to free GPU memory at once.
 - Tests: `quality.test.ts` and `frame-monitor.test.ts` cover the rules; end-to-end tests cover pausing on a hidden tab and the fallback (Chrome's CPU throttled 30 times through the DevTools protocol). Headless Chromium reports SwiftShader, so the end-to-end tests run at `minimal`.
@@ -106,7 +106,8 @@ GLSL lives in `src/scene/shaders/*.glsl`, imported as strings with Vite's `?raw`
 ## Lighthouse and CI
 
 - `pnpm lighthouse` (after `pnpm build`) runs Lighthouse CI five times on the mobile preset against `dist/`, served by Lighthouse CI's own static server (gzip, like Vercel). It fails when the median of the five values (`aggregationMethod: "median"`, which absorbs up to two slow, cold runs) is below Performance 90 or Accessibility, Best Practices, SEO 95, or layout shift is above 0.01. Never use `median-run`: Lighthouse CI picks that run by its first paint and time to interactive, not by score, and it once passed a build whose scores were 77, 77, 78, 89 and 93. Reports land in `.lighthouseci/` (open the `.html` files).
-- Lighthouse launches its own Chrome, which has no GPU in CI. `--enable-unsafe-swiftshader` in `lighthouserc.json` gives it software WebGL, and `scripts/check-lighthouse-scene.ts` fails the run unless the scene chunk was downloaded in every run. Without that guard, a Chrome without WebGL would never load Three.js and the scores would flatter the page.
+- CI machines have no GPU, so CI's Lighthouse measures what a visitor without one gets: the text and the poster, no Three.js. `scripts/check-lighthouse-path.ts` reports which page each run measured (the scene's script downloaded or not) and fails if the runs disagree or, with `LIGHTHOUSE_EXPECTS=poster` (set in CI), if any run measured the scene. The live scene's cost is measured where there is a GPU (`docs/performance.md`), and its weight is gated in CI by `pnpm size` (`scripts/check-sizes.ts`: page script, styles, the scene chunk and the posters against fixed budgets, after `pnpm build`).
+- Lighthouse's own injected script (`_lighthouse-eval.js`) sometimes shows up as a long task of up to a second or so, mostly in the first, cold run; it is noise in Total Blocking Time that the median absorbs.
 - The metric to watch is Total Blocking Time: Lighthouse simulates a slow phone CPU (4x), and Three.js's startup shows up there.
 - GitHub Actions (`.github/workflows/ci.yml`) runs on pushes to `main` and on pull requests, in three jobs: format, lint, typecheck and unit tests; end-to-end tests; Lighthouse. Each job sets up through `.github/actions/setup` (pnpm from `packageManager`, Node from `engines.node`, frozen lockfile). Lighthouse reports are uploaded as an artifact on every run, the Playwright report on failure.
 - Known variance: the first Lighthouse run on a fresh CI machine can be far slower (seen: Performance 72, Total Blocking Time 1.9 s, against 100 and about 30 ms for the warm runs). That cold run is the closest to a slow phone's first visit, so it is the number Phase 3 must bring down, not one to explain away.
@@ -135,6 +136,7 @@ pnpm format         # or format:check
 pnpm test           # unit tests (Vitest); test:watch while working
 pnpm test:e2e       # end-to-end tests (Playwright), builds and serves on 3301 first
 pnpm lighthouse     # Lighthouse CI on dist/ (run pnpm build first)
+pnpm size          # size budgets for dist/ (run pnpm build first)
 pnpm poster         # capture the poster (the scene's first frame) into src/poster/
 ```
 
@@ -166,7 +168,8 @@ e2e/
   test.ts            Playwright test + expect, failing on page errors
   *.spec.ts          end-to-end specs
 scripts/
-  check-lighthouse-scene.ts   fails unless the scene loaded in every Lighthouse run (Node runs .ts directly)
+  check-lighthouse-path.ts    which page Lighthouse measured (scene or poster); fails on a mix or a mismatch
+  check-sizes.ts              size budgets for the built files (pnpm size)
   capture-poster.ts           captures the poster from the real scene (pnpm poster)
 .github/
   workflows/ci.yml   checks, end-to-end and Lighthouse jobs
