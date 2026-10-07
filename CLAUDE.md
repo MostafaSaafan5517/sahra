@@ -53,8 +53,17 @@ GLSL lives in `src/scene/shaders/*.glsl`, imported as strings with Vite's `?raw`
 ## How the dunes work
 
 - Each point's `position` is not a place: it packs its layout (place along its line, which line, a fixed random number), built once by `createDuneGeometry` in `dunes.ts` with a seeded random generator, so the sand is laid out the same on every visit. Lines are stored farthest first, so nearer sand draws over farther sand.
-- The vertex shader computes everything else, every frame: line depth (evenly spaced in inverse depth, so evenly spaced on screen), line width (the view's width at that depth, from `uAspect`), the downwind drift (wrapping at the edges), the noise flow field, the dune height (ridged noise with a warp, creeping downwind), a flatter foreground (so the nearest lines stay below the bottom edge), crest shading, point size and fading.
+- The vertex shader computes everything else, every frame: line depth (evenly spaced in inverse depth, so evenly spaced on screen), line width (the view's width at that depth, from `uAspect`), the downwind drift (wrapping at the edges), the noise flow field, the dune height (ridged noise with a warp, creeping downwind), a flatter foreground (so the nearest lines stay below the bottom edge), sun shading, point size, haze and fading.
 - Per frame, JavaScript only updates `uTime`. Tunable values live in `src/scene/settings.ts`.
+
+## How the light works
+
+- `lighting.ts` holds three keyframes, `DAWN`, `MIDDAY` and `DUSK` (sky top, horizon glow, ground, lit sand, shaded sand, sun direction), and `lightAt(phase)`, which eases between them: 0 dawn, 1/3 midday, 2/3 dusk, 1 dawn again. It writes into an existing object, so the render loop allocates nothing.
+- Each frame, `scene.ts` computes the phase (`startPhase` plus elapsed time over `cycleSeconds`, 180 s by default), gets the light and copies it into uniforms; the shaders do the rest. Colours are display (sRGB) values that the shaders write out unchanged.
+- The sky is a full-screen quad (`sky.*.glsl`) drawn before the dunes: the horizon glow fades up into the dark sky and lingers down as haze behind the far dunes; a low sun adds a bloom on its side (left at dawn, right at dusk); a faint per-frame grain also dithers the dark gradients against banding.
+- The dunes are lit by the sun: one extra height sample gives each grain's slope, and faces toward the sun take the lit colour, the rest the shade colour. Far sand fades into the horizon colour; the nearest grains are drawn softer.
+- Readability is a test, not a judgement: `lighting.test.ts` checks the page's text colours against the sky, the horizon (with the sun bloom, `SUN_GLOW`) and the ground at 300 points of the cycle, all at least 4.5:1. Sand grains behind the text are a Phase 4 concern (dimming the sand under the text).
+- `?tune` adds `cycleSeconds` and `startPhase` (jump to a point of the cycle) to the panel.
 
 ## How the gusts work
 
@@ -123,11 +132,13 @@ src/
   scene/
     scene.ts         Three.js renderer, dune points, uniforms, render loop, input wiring
     camera.ts        the camera and the near and far depths (shared with the tests)
+    lighting.ts      the dawn, midday and dusk keyframes, lightAt, contrastRatio (lighting.test.ts)
     wind.ts          gusts: GustField (uniform arrays), groundPoint, GustTrail, listeners (wind.test.ts)
     tune.ts          the ?tune panel (lil-gui), loaded only with that flag
     dunes.ts         the points' layout and the seeded random generator (unit-tested in dunes.test.ts)
-    settings.ts      tunable values: counts, wind, flow, dune height, grain size, gusts
-    shaders/         noise.glsl, dunes.vert.glsl (all motion), dunes.frag.glsl (round soft grains)
+    settings.ts      tunable values: counts, wind, flow, dune height, grain size, gusts, light cycle
+    shaders/         noise.glsl; dunes.vert.glsl (all motion, sun shading), dunes.frag.glsl (soft
+                     grains, haze); sky.vert.glsl and sky.frag.glsl (gradient, sun bloom, grain)
 e2e/
   test.ts            Playwright test + expect, failing on page errors
   *.spec.ts          end-to-end specs
@@ -147,4 +158,4 @@ tsconfig.node.json   config files, e2e/ and scripts/ (Node types, plus DOM for c
 
 ## Status
 
-Phase 0 (setup) done: scaffold, lazy-loaded Three.js scene, tests, CI with Lighthouse, Vercel with previews. Phase 1 (scene prototype) in progress on `feature/sahra-dune-scene`. Phases: 0 setup, 1 scene prototype, 2 art direction, 3 performance and adaptivity, 4 content layer and booking, 5 Lab, 6 embeddable package, 7 docs and portfolio packaging. The favicon is deliberately empty (`data:,`) until the brand mark lands in Phase 4.
+Phase 0 (setup) done: scaffold, lazy-loaded Three.js scene, tests, CI with Lighthouse, Vercel with previews. Phase 1 (scene prototype) built and Phase 2 (art direction) in progress, both on `feature/sahra-dune-scene` (PR #2). The PR stays open until Phase 3's adaptive quality makes the Lighthouse gate pass on CI's software WebGL; production keeps the Phase 0 placeholder until then. Phases: 0 setup, 1 scene prototype, 2 art direction, 3 performance and adaptivity, 4 content layer and booking, 5 Lab, 6 embeddable package, 7 docs and portfolio packaging. The favicon is deliberately empty (`data:,`) until the brand mark lands in Phase 4.

@@ -21,9 +21,17 @@ uniform vec4 uGustDirections[MAX_GUSTS];
 uniform float uGustStrength;
 uniform float uGustRadius;
 uniform float uGustLife;
+uniform vec3 uSandLit;
+uniform vec3 uSandShade;
+// Direction toward the sun, seen from the camera: x left to right, y up (a unit vector).
+uniform vec2 uSun;
 
+varying vec3 vColor;
 varying float vAlpha;
-varying float vShade;
+// 0 near, 1 at the far edge: how much a grain fades into the horizon's glow.
+varying float vHaze;
+// 1 for the nearest grains, which are drawn softer, as if out of focus.
+varying float vSoft;
 
 // Dune height at a ground position: ridged noise for sharp crests and soft troughs, a warp so
 // crest lines curve, and a slow drift so the dunes creep downwind.
@@ -56,8 +64,14 @@ void main() {
 
   // Right in front of the camera the sand is flatter, as if standing in a trough, so the nearest
   // lines stay below the bottom edge of the view instead of rising into it.
-  float height = duneHeight(world.xz) * mix(0.3, 1.0, smoothstep(uNearDepth, uNearDepth * 3.5, depth));
+  float flatten = mix(0.3, 1.0, smoothstep(uNearDepth, uNearDepth * 3.5, depth));
+  float rawHeight = duneHeight(world.xz);
+  float height = rawHeight * flatten;
   float crestiness = clamp(height / max(uDuneHeight, 0.001), 0.0, 1.0);
+  // The slope along the view's left-right axis gives each grain's surface a normal; the sun
+  // lights the faces turned toward it. One extra height sample, a small step downwind.
+  float slope = (duneHeight(world.xz + vec2(0.15, 0.0)) - rawHeight) / 0.15 * flatten;
+  float sunlight = clamp(dot(normalize(vec2(-slope, 1.0)), uSun), 0.0, 1.0);
   world.y = height;
   // Near the crests, some grains lift off a little, as blown sand does.
   world.y += max(0.0, snoise(world.xz * 1.3 + vec2(uTime * 0.25, 0.0))) * uFlowStrength * 0.25 * crestiness;
@@ -81,15 +95,17 @@ void main() {
   }
   world += push;
 
-  // Crests catch more light than troughs.
-  vShade = mix(0.45, 1.0, crestiness);
+  // Faces toward the sun are lit, crests a little more; the rest falls into the shade colour.
+  vColor = mix(uSandShade, uSandLit, clamp(sunlight * 0.85 + crestiness * 0.25, 0.0, 1.0));
+  vHaze = smoothstep(uFarDepth * 0.25, uFarDepth, depth);
+  vSoft = 1.0 - smoothstep(uNearDepth, uNearDepth * 2.5, depth);
 
   vec4 viewPosition = modelViewMatrix * vec4(world, 1.0);
   gl_Position = projectionMatrix * viewPosition;
 
   // Points shrink with distance. Below one CSS pixel they stay one pixel and fade instead, which
-  // avoids shimmer. Far lines also fade into the dark.
+  // avoids shimmer. The farthest lines dissolve into the horizon.
   float size = uPointSize * uPixelRatio * 4.0 / -viewPosition.z;
   gl_PointSize = max(size, uPixelRatio);
-  vAlpha = clamp(size / uPixelRatio, 0.0, 1.0) * (1.0 - smoothstep(uFarDepth * 0.45, uFarDepth, depth));
+  vAlpha = clamp(size / uPixelRatio, 0.0, 1.0) * (1.0 - smoothstep(uFarDepth * 0.6, uFarDepth, depth));
 }

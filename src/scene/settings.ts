@@ -17,4 +17,8 @@ export const SCENE_SETTINGS = {
   gustRadius: 1.4,
   /** Seconds from a gust's start until its sand has settled back. */
   gustLife: 2.4,
+  /** Seconds for the light to go from dawn through midday and dusk back to dawn. */
+  cycleSeconds: 180,
+  /** Where in that cycle a visit starts: 0 dawn, 1/3 midday, 2/3 dusk. */
+  startPhase: 0.08,
 };
