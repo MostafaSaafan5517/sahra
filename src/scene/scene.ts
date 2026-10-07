@@ -27,6 +27,13 @@ import { GustField, GustTrail, listenForGusts, MAX_GUSTS } from "./wind";
 /** Matches the page background (`bg-neutral-950`), so the canvas fades in without a seam. */
 const BACKGROUND = 0x0a0a0a;
 const LIGHTEST_TIER = QUALITY_TIERS.length - 1;
+/**
+ * Frame budgets for the 75th-percentile frame. Above 22 ms (below about 45 fps) the scene steps
+ * down a tier. At the lightest tier it gives up for the poster only above 40 ms (below about
+ * 25 fps): a steady 45 fps scene is still far better than none.
+ */
+const STEP_DOWN_BUDGET_MS = 22;
+const GIVE_UP_BUDGET_MS = 40;
 
 /**
  * Changes after the scene has started: `lost` when the browser takes WebGL away (phones do under
@@ -62,7 +69,8 @@ export async function startScene(
   const camera = createCamera(1);
   const gusts = new GustField();
   const light = lightAt(SCENE_SETTINGS.startPhase);
-  let tierIndex = initialTier(readDeviceSignals(context));
+  const signals = readDeviceSignals(context);
+  let tierIndex = initialTier(signals);
 
   // The scene's clock, in seconds: starts at `startTime` with the first frame and stands still
   // while the scene is paused. Animation frames and pointer events both read it.
@@ -183,7 +191,8 @@ export async function startScene(
   let lowPower = false;
   function frame(timeMs: number): void {
     render(timeMs);
-    if (!monitor.frame(timeMs)) return;
+    const budget = tierIndex < LIGHTEST_TIER ? STEP_DOWN_BUDGET_MS : GIVE_UP_BUDGET_MS;
+    if (!monitor.frame(timeMs, budget)) return;
     if (tierIndex < LIGHTEST_TIER) {
       tierIndex += 1;
       applyTier();
@@ -272,7 +281,30 @@ export async function startScene(
   const trail = new GustTrail(camera, gusts, SCENE_SETTINGS.gustLife / MAX_GUSTS);
   removeListeners.push(listenForGusts(trail, () => sceneSeconds(performance.now())));
 
-  if (new URLSearchParams(location.search).has("tune")) {
+  const flags = new URLSearchParams(location.search);
+  if (flags.has("debug")) {
+    import("./debug").then(
+      ({ openDebugOverlay }) => {
+        openDebugOverlay(() => {
+          const { lines, pointsPerLine, name } = qualityTier(tierIndex);
+          return {
+            ...monitor.stats(),
+            tier: name,
+            grains: lines * pointsPerLine,
+            pixelRatio: renderer.getPixelRatio(),
+            canvasWidth: canvas.width,
+            canvasHeight: canvas.height,
+            renderer: signals.renderer,
+            state: lowPower ? "low-power" : looping ? "running" : "paused",
+          };
+        });
+      },
+      (error: unknown) => {
+        console.error("The debug overlay failed to load", error);
+      },
+    );
+  }
+  if (flags.has("tune")) {
     openTuning({
       duneUniforms,
       trail,

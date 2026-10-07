@@ -125,6 +125,19 @@ test("opens a tuning panel with ?tune, and only then", async ({ page }) => {
   await expect(page.getByText("Copy values")).toBeVisible();
 });
 
+test("shows the frame rate and the quality with ?debug, and only then", async ({ page }) => {
+  await page.goto("/");
+  await runningSceneCanvas(page);
+  await expect(page.getByText(/fps|measuring the frame rate/)).toHaveCount(0);
+
+  await page.goto("/?debug");
+  await runningSceneCanvas(page);
+  // Headless Chromium draws WebGL in software (SwiftShader), which starts at the lightest tier.
+  await expect(page.getByText(/quality minimal: 9,216 grains/)).toBeVisible();
+  await expect(page.getByText(/SwiftShader/)).toBeVisible();
+  await expect(page.getByText(/\d+\.\d fps/)).toBeVisible({ timeout: 10_000 });
+});
+
 test("pauses while the tab is hidden, and carries on when it is shown again", async ({ page }) => {
   await page.goto("/");
   await runningSceneCanvas(page);

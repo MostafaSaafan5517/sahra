@@ -1,15 +1,11 @@
 export interface FrameMonitorOptions {
-  /** The window is too slow when its 75th-percentile frame takes longer than this. */
-  budgetMs: number;
   /** How much recent time is judged at once. */
   windowMs: number;
   /** Frames right after a (re)start are not judged: shaders, caches and memory are settling. */
   warmupMs: number;
 }
 
-/** 22 ms is below about 45 frames a second: the scene aims for 60 and steps down well before 30. */
 export const DEFAULT_FRAME_MONITOR_OPTIONS: FrameMonitorOptions = {
-  budgetMs: 22,
   windowMs: 1500,
   warmupMs: 1000,
 };
@@ -51,8 +47,11 @@ export class FrameMonitor {
     this.judgingFrom = timeMs + this.options.warmupMs;
   }
 
-  /** Records a frame drawn at `timeMs`. True means the recent frames were too slow. */
-  frame(timeMs: number): boolean {
+  /**
+   * Records a frame drawn at `timeMs`. True means the recent frames were too slow: their
+   * 75th-percentile frame took longer than `budgetMs`.
+   */
+  frame(timeMs: number, budgetMs: number): boolean {
     const lastTime = this.lastTime;
     this.lastTime = timeMs;
     if (lastTime === null) return false;
@@ -66,7 +65,7 @@ export class FrameMonitor {
     }
     // Judge only a full window of frames.
     if (timeMs - this.judgingFrom < this.options.windowMs) return false;
-    if (this.stats().slowFrameMs <= this.options.budgetMs) return false;
+    if (this.stats().slowFrameMs <= budgetMs) return false;
     this.restart(timeMs);
     this.lastTime = timeMs;
     return true;

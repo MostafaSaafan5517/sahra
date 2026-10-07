@@ -51,8 +51,9 @@ The container's `data-state` records the scene's state: `unsupported` (no WebGL2
 ## Adaptive quality, pausing and cleanup
 
 - `quality.ts` defines four tiers, `high`, `medium`, `low` and `minimal`, each with fewer grains (lines times points per line) and a lower pixel-ratio cap. `initialTier` picks the starting one from the device: a software WebGL renderer (SwiftShader, llvmpipe) starts at `minimal`; data saver, two cores or two GB of memory at `low`; desktops with four cores or more at `high`; phones by memory and cores (Safari reports no memory: treated as 4 GB, so `medium`).
-- `frame-monitor.ts` judges the frame rate: after a one-second warmup it looks at a 1.5 s window, and when the 75th-percentile frame takes longer than 22 ms (below about 45 fps) it says so and starts over. The scene then steps down one tier (new geometry, new pixel ratio). It never steps up: no flip-flopping. At `minimal`, a slow verdict freezes the scene and reports `low-power`; `main.ts` lets the canvas fade out to the poster, then calls `stop()` and removes the canvas.
+- `frame-monitor.ts` judges the frame rate: after a one-second warmup it looks at a 1.5 s window, and when the 75th-percentile frame takes longer than the budget it is given, it says so and starts over. Above 22 ms (below about 45 fps) the scene steps down one tier (new geometry, new pixel ratio). It never steps up: no flip-flopping. At `minimal` the budget is 40 ms (below about 25 fps), because giving up for the poster is a much bigger step than a lighter tier: headless Chrome's software WebGL runs `minimal` at about 45 fps and keeps the scene. A slow verdict there freezes the scene and reports `low-power`; `main.ts` lets the canvas fade out to the poster, then calls `stop()` and removes the canvas.
 - The loop runs only when it is worth it: not with reduced motion, not while the tab is hidden (`visibilitychange`), not while the canvas is off screen (IntersectionObserver; matters for embeds), not while WebGL is lost, not after `low-power` or `stop()`. The scene's clock stands still while paused, so it resumes where it left off, and the monitor restarts on resume (it has no pause logic of its own, so any long gap it sees is a slow frame).
+- `?debug` opens an overlay (`debug.ts`, its own lazy chunk) with the frame rate, the slowest quarter of frames, the tier, grains, pixel ratio, canvas size, state and renderer, updated every second. It is how the real-device numbers in `docs/performance.md` are measured.
 - `stop()` removes every listener and observer, disposes geometries and materials, disposes the renderer and calls `WEBGL_lose_context` to free GPU memory at once.
 - Tests: `quality.test.ts` and `frame-monitor.test.ts` cover the rules; end-to-end tests cover pausing on a hidden tab and the fallback (Chrome's CPU throttled 30 times through the DevTools protocol). Headless Chromium reports SwiftShader, so the end-to-end tests run at `minimal`.
 
@@ -155,6 +156,7 @@ src/
     lighting.ts      the dawn, midday and dusk keyframes, lightAt, contrastRatio (lighting.test.ts)
     wind.ts          gusts: GustField (uniform arrays), groundPoint, GustTrail, listeners (wind.test.ts)
     tune.ts          the ?tune panel (lil-gui), loaded only with that flag
+    debug.ts         the ?debug overlay (frame rate, quality, renderer), loaded only with that flag
     dunes.ts         the points' layout and the seeded random generator (unit-tested in dunes.test.ts)
     settings.ts      tunable values: wind, flow, dune height, grain size, gusts, light cycle, start
     shaders/         noise.glsl; dunes.vert.glsl (all motion, sun shading), dunes.frag.glsl (soft

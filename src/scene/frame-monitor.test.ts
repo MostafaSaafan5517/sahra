@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { FrameMonitor } from "./frame-monitor";
 
+/** Below about 45 frames a second, as the scene uses for stepping down. */
+const BUDGET_MS = 22;
+
 /** Feeds frames every `frameMs` from `fromMs` to `toMs`; returns the times it said "too slow". */
 function run(monitor: FrameMonitor, fromMs: number, toMs: number, frameMs: number): number[] {
   const verdicts: number[] = [];
   for (let time = fromMs; time <= toMs; time += frameMs) {
-    if (monitor.frame(time)) verdicts.push(time);
+    if (monitor.frame(time, BUDGET_MS)) verdicts.push(time);
   }
   return verdicts;
 }
@@ -49,13 +52,23 @@ describe("FrameMonitor", () => {
     for (let frame = 0; frame < 600; frame++) {
       // Every 20th frame takes 80 ms instead of 16.7 ms.
       time += frame % 20 === 0 ? 80 : 1000 / 60;
-      if (monitor.frame(time)) verdicts.push(time);
+      if (monitor.frame(time, BUDGET_MS)) verdicts.push(time);
     }
     expect(verdicts).toEqual([]);
   });
 
   it("counts even extremely slow frames, one every two seconds, as too slow", () => {
     expect(run(started(), 0, 6000, 2000)).toHaveLength(1);
+  });
+
+  it("judges against the budget it is given", () => {
+    // 30 frames a second is too slow for 22 ms, but within 40 ms.
+    const monitor = started();
+    const verdicts: number[] = [];
+    for (let time = 0; time <= 6000; time += 1000 / 30) {
+      if (monitor.frame(time, 40)) verdicts.push(time);
+    }
+    expect(verdicts).toEqual([]);
   });
 
   it("starts over when restarted, as the scene does after a pause", () => {
