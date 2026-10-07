@@ -129,32 +129,35 @@ export class GustTrail {
  * Feeds mouse and finger movement anywhere on the page into the trail. Fingers use touch events
  * rather than pointer events: touch events keep arriving while the browser scrolls or zooms, and
  * passive listeners never block either, so the page's own touch behaviour is untouched.
+ * Returns a function that removes the listeners.
  */
-export function listenForGusts(trail: GustTrail, seconds: () => number): void {
-  addEventListener(
-    "pointermove",
-    (event) => {
-      if (event.pointerType === "touch") return;
-      trail.move(event.clientX, event.clientY, seconds(), innerWidth, innerHeight);
-    },
-    { passive: true },
-  );
+export function listenForGusts(trail: GustTrail, seconds: () => number): () => void {
+  const followPointer = (event: PointerEvent) => {
+    if (event.pointerType === "touch") return;
+    trail.move(event.clientX, event.clientY, seconds(), innerWidth, innerHeight);
+  };
   const followFinger = (event: TouchEvent) => {
     const touch = event.touches[0];
     if (touch) trail.move(touch.clientX, touch.clientY, seconds(), innerWidth, innerHeight);
   };
-  addEventListener(
-    "touchstart",
-    (event) => {
-      trail.end();
-      followFinger(event);
-    },
-    { passive: true },
-  );
-  addEventListener("touchmove", followFinger, { passive: true });
+  const startStroke = (event: TouchEvent) => {
+    trail.end();
+    followFinger(event);
+  };
   const endStroke = () => {
     trail.end();
   };
-  addEventListener("touchend", endStroke, { passive: true });
-  addEventListener("touchcancel", endStroke, { passive: true });
+  const passive = { passive: true };
+  addEventListener("pointermove", followPointer, passive);
+  addEventListener("touchstart", startStroke, passive);
+  addEventListener("touchmove", followFinger, passive);
+  addEventListener("touchend", endStroke, passive);
+  addEventListener("touchcancel", endStroke, passive);
+  return () => {
+    removeEventListener("pointermove", followPointer);
+    removeEventListener("touchstart", startStroke);
+    removeEventListener("touchmove", followFinger);
+    removeEventListener("touchend", endStroke);
+    removeEventListener("touchcancel", endStroke);
+  };
 }

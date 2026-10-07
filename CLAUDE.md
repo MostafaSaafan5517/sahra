@@ -46,7 +46,15 @@ The project name lives only in `src/config.ts` (`SITE_NAME`). HTML pages use the
 5. Shaders compile with `renderer.compileAsync` (non-blocking where the browser supports parallel shader compilation); the first frame is drawn, and only then does the canvas fade in.
 6. With `prefers-reduced-motion: reduce`, one still frame is drawn and no animation loop starts.
 
-The container's `data-state` records the outcome: `unsupported` (no WebGL2), `running` (first frame on screen) or `failed`. CSS reads it (the canvas fades in on `running`), and tests wait on it instead of on timers.
+The container's `data-state` records the scene's state: `unsupported` (no WebGL2), `running` (on screen), `failed` (could not start), `lost` (the browser took WebGL away for now; Three.js restores itself and the state returns to `running`) or `low-power` (too slow even at the lightest quality). CSS shows the canvas only while `running`, so in every other state the poster beneath it shows. Tests wait on the state instead of on timers.
+
+## Adaptive quality, pausing and cleanup
+
+- `quality.ts` defines four tiers, `high`, `medium`, `low` and `minimal`, each with fewer grains (lines times points per line) and a lower pixel-ratio cap. `initialTier` picks the starting one from the device: a software WebGL renderer (SwiftShader, llvmpipe) starts at `minimal`; data saver, two cores or two GB of memory at `low`; desktops with four cores or more at `high`; phones by memory and cores (Safari reports no memory: treated as 4 GB, so `medium`).
+- `frame-monitor.ts` judges the frame rate: after a one-second warmup it looks at a 1.5 s window, and when the 75th-percentile frame takes longer than 22 ms (below about 45 fps) it says so and starts over. The scene then steps down one tier (new geometry, new pixel ratio). It never steps up: no flip-flopping. At `minimal`, a slow verdict freezes the scene and reports `low-power`; `main.ts` lets the canvas fade out to the poster, then calls `stop()` and removes the canvas.
+- The loop runs only when it is worth it: not with reduced motion, not while the tab is hidden (`visibilitychange`), not while the canvas is off screen (IntersectionObserver; matters for embeds), not while WebGL is lost, not after `low-power` or `stop()`. The scene's clock stands still while paused, so it resumes where it left off, and the monitor restarts on resume (it has no pause logic of its own, so any long gap it sees is a slow frame).
+- `stop()` removes every listener and observer, disposes geometries and materials, disposes the renderer and calls `WEBGL_lose_context` to free GPU memory at once.
+- Tests: `quality.test.ts` and `frame-monitor.test.ts` cover the rules; end-to-end tests cover pausing on a hidden tab and the fallback (Chrome's CPU throttled 30 times through the DevTools protocol). Headless Chromium reports SwiftShader, so the end-to-end tests run at `minimal`.
 
 GLSL lives in `src/scene/shaders/*.glsl`, imported as strings with Vite's `?raw` suffix. `noise.glsl` (simplex noise from webgl-noise, MIT) is prepended to the vertex shader in `scene.ts`.
 
@@ -54,7 +62,7 @@ GLSL lives in `src/scene/shaders/*.glsl`, imported as strings with Vite's `?raw`
 
 - Each point's `position` is not a place: it packs its layout (place along its line, which line, a fixed random number), built once by `createDuneGeometry` in `dunes.ts` with a seeded random generator, so the sand is laid out the same on every visit. Lines are stored farthest first, so nearer sand draws over farther sand.
 - The vertex shader computes everything else, every frame: line depth (evenly spaced in inverse depth, so evenly spaced on screen), line width (the view's width at that depth, from `uAspect`), the downwind drift (wrapping at the edges), the noise flow field, the dune height (ridged noise with a warp, creeping downwind), a flatter foreground (so the nearest lines stay below the bottom edge), sun shading, point size, haze and fading.
-- Per frame, JavaScript only updates `uTime`. Tunable values live in `src/scene/settings.ts`.
+- Per frame, JavaScript only updates a few uniforms (time and the light). Tunable values live in `src/scene/settings.ts`; grain counts come from the quality tier.
 
 ## How the light works
 
@@ -140,13 +148,15 @@ src/
   style.css          Tailwind and global styles
   poster/            the poster, landscape and portrait WebP at several widths (pnpm poster)
   scene/
-    scene.ts         Three.js renderer, dune points, uniforms, render loop, input wiring
+    scene.ts         renderer, dunes, sky, uniforms, render loop, tiers, pausing, stop(), ?tune wiring
+    quality.ts       quality tiers and the starting tier from device signals (quality.test.ts)
+    frame-monitor.ts judges the frame rate for stepping quality down (frame-monitor.test.ts)
     camera.ts        the camera and the near and far depths (shared with the tests)
     lighting.ts      the dawn, midday and dusk keyframes, lightAt, contrastRatio (lighting.test.ts)
     wind.ts          gusts: GustField (uniform arrays), groundPoint, GustTrail, listeners (wind.test.ts)
     tune.ts          the ?tune panel (lil-gui), loaded only with that flag
     dunes.ts         the points' layout and the seeded random generator (unit-tested in dunes.test.ts)
-    settings.ts      tunable values: counts, wind, flow, dune height, grain size, gusts, light cycle
+    settings.ts      tunable values: wind, flow, dune height, grain size, gusts, light cycle, start
     shaders/         noise.glsl; dunes.vert.glsl (all motion, sun shading), dunes.frag.glsl (soft
                      grains, haze); sky.vert.glsl and sky.frag.glsl (gradient, sun bloom, grain)
 e2e/

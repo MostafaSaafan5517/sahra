@@ -19,10 +19,14 @@ function whenPageIsIdle(task: () => void): void {
 }
 
 /**
- * Adds the scene to the container and records the outcome in its `data-state`:
- * `unsupported` (no WebGL2), `running` (first frame on screen) or `failed`.
- * CSS reads the state to fade the canvas in.
+ * Adds the scene to the container and records its state in `data-state`: `unsupported` (no
+ * WebGL2), `running` (on screen), `failed` (could not start), `lost` (WebGL taken away for now) or
+ * `low-power` (too slow even at the lightest quality). CSS shows the canvas only while `running`;
+ * otherwise the poster beneath it shows.
  */
+/** How long the canvas takes to fade in or out (`duration-1000` on it). */
+const CANVAS_FADE_MS = 1000;
+
 async function mountScene(container: HTMLElement): Promise<void> {
   const canvas = document.createElement("canvas");
   // Points need no depth buffer, stencil or antialiasing; an opaque canvas composites cheaper.
@@ -43,8 +47,17 @@ async function mountScene(container: HTMLElement): Promise<void> {
   container.append(canvas);
   try {
     const { startScene } = await import("./scene/scene");
-    await startScene(canvas, context, {
+    const scene = await startScene(canvas, context, {
       animate: !matchMedia("(prefers-reduced-motion: reduce)").matches,
+      onStateChange: (state) => {
+        container.dataset.state = state;
+        if (state !== "low-power") return;
+        // The canvas fades out to the poster; then the scene is released for good.
+        setTimeout(() => {
+          scene.stop();
+          canvas.remove();
+        }, CANVAS_FADE_MS);
+      },
     });
     container.dataset.state = "running";
   } catch (error) {

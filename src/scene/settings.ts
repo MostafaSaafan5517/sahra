@@ -2,8 +2,6 @@
 export const SCENE_SETTINGS = {
   /** Same seed, same sand: the layout of the points never changes between visits. */
   seed: 1,
-  lines: 96,
-  pointsPerLine: 512,
   /** How fast grains stream downwind along their lines. */
   windSpeed: 0.35,
   /** How far the noise currents carry grains off their lines. */

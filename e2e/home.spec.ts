@@ -125,6 +125,40 @@ test("opens a tuning panel with ?tune, and only then", async ({ page }) => {
   await expect(page.getByText("Copy values")).toBeVisible();
 });
 
+test("pauses while the tab is hidden, and carries on when it is shown again", async ({ page }) => {
+  await page.goto("/");
+  await runningSceneCanvas(page);
+  const setVisibility = (state: "hidden" | "visible") =>
+    page.evaluate((visibility) => {
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        get: () => visibility,
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+    }, state);
+
+  await setVisibility("hidden");
+  expect(await sceneMoves(page), "the scene moves while hidden").toBe(false);
+  await setVisibility("visible");
+  expect(await sceneMoves(page), "the scene moves once shown again").toBe(true);
+});
+
+test("falls back to the poster when the device is too slow, and releases the scene", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await runningSceneCanvas(page);
+  // Thirty times slower: every frame now misses its budget, even at the lightest quality.
+  const devtools = await page.context().newCDPSession(page);
+  await devtools.send("Emulation.setCPUThrottlingRate", { rate: 30 });
+  await expect(page.locator("[data-scene]")).toHaveAttribute("data-state", "low-power", {
+    timeout: 20_000,
+  });
+  await devtools.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+  await expect(page.locator("[data-scene] canvas")).toHaveCount(0);
+  await expect(page.locator("[data-scene] img")).toBeVisible();
+});
+
 test.describe("with reduced motion", () => {
   test.use({ contextOptions: { reducedMotion: "reduce" } });
 
