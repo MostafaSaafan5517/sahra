@@ -1,6 +1,6 @@
 # Sahra: project guide
 
-Sahra (Arabic for "desert") is a full-screen generative scene of wind moving over desert sand. Tens of thousands of particles form flowing dune lines that drift on their own; the visitor's cursor or finger is a gust of wind that scatters the sand, which then settles back; the light shifts slowly between dawn, midday and dusk. Minimal content sits on top (name, one line, a few links, a "Book a call" button opening a Calendly overlay). It is the homepage of a fictional design studio, labeled as a portfolio project in the footer. A Lab page adds two studies: a self-drawing SVG geometric pattern and a GSAP scroll story. The scene also ships as an embeddable script for Webflow, WordPress and other sites.
+Sahra (Arabic for "desert") is a full-screen generative scene of wind moving over desert sand. Tens of thousands of particles form flowing dune lines that drift on their own; the visitor's cursor or finger is a gust of wind that scatters the sand, which then settles back; the light shifts slowly between dawn, midday and dusk. Minimal content sits on top (name, one line, a "Hire on Upwork" button and a few links). It is the homepage of a fictional design studio, labeled as a portfolio project in the footer. A Lab page (`/lab/`) adds two studies: a self-drawing SVG geometric pattern and a GSAP scroll story. The scene also ships as an embeddable script for Webflow, WordPress and other sites.
 
 This is a public portfolio project proving creative front-end work. Performance, accessibility and a clean commit history matter as much as the visuals. Every technique must be explainable in a client interview, especially the shaders, the adaptive quality system and the loading strategy.
 
@@ -39,10 +39,27 @@ The project name lives only in `src/config.ts` (`SITE_NAME`). HTML pages use the
 
 ## The text layer
 
-- One composition over the scene: the studio's name (`h1`), one line, one action ("Hire on Upwork", an amber pill, to Mostafa's Upwork profile) and one quiet link ("Source on GitHub"). Mostafa dropped the brief's Calendly "Book a call" on 2026-10-08; there is one contact action, so no second link with the same intent. A footer says plainly that the studio is fictional and the site a portfolio project. Copy: no em or en dashes, no invented clients, numbers or praise.
+- One composition over the scene: the studio's name (`h1`), one line, one action ("Hire on Upwork", an amber pill, to Mostafa's Upwork profile) and two quiet links ("The Lab" and "Source on GitHub", in that order for the keyboard). Mostafa dropped the brief's Calendly "Book a call" on 2026-10-08; there is one contact action, so no second link with the same intent. A footer says plainly that the studio is fictional and the site a portfolio project. Copy: no em or en dashes, no invented clients, numbers or praise.
 - The text sits in the sky, above the dunes, on every screen shape; `.text-scrim` (`src/style.css`) is a soft dark wash behind it for wide windows where far dunes reach up, and the footer sits on a dark gradient over the near sand. Both work on the poster too.
 - Design (per the `design-taste-frontend` skill): Instrument Sans; one accent, the dusk amber `--color-accent` (#efa463, also the icon's sun), used for the one action's fill, hover and focus; text in neutrals; left-aligned, airy, dark only (the scene and poster are a dark desert). The icon (`src/favicon.svg`) is a single geometric mark: the sun half set behind the horizon.
 - Readability is measured, not assumed: `e2e/readability.spec.ts` sets six points of the light cycle at the densest tier, makes the text transparent, measures the background behind every text element from screenshots (95th-percentile pixel: the scene, haze and wash together) and checks WCAG AA against each text's colour. Lowest measured: footer 9:1, "Hire on Upwork" (dark ink on the amber pill) 9.6:1, the line 14.6:1, the GitHub link 15.9:1, name 18.4:1. Computed colours can come back as `oklch()`: the test converts them by painting a pixel.
+
+## The Lab
+
+`lab/index.html` (served at `/lab/`): the same font, header link home, "Hire on Upwork" and footer as the home page; no scene and no Three.js. Studies of the kind clients ask for, each built to stay light on a phone:
+
+1. **A pattern that draws itself.** Eight-point stars in the tradition of Islamic geometric art, built with Hankin's "polygons in contact" method on the octagon and square tiling (4.8.8): from the middle of every edge, two lines leave into each tile at the contact angle and run until they meet the neighbouring edge's line. Octagons get eight-point stars, squares small four-point stars, and every line crosses an edge straight into the next tile. The contact angle is 60 degrees (67.5, the other classic choice, crowds the stars with overlapping kites; compared side by side from 45 to 72).
+   - `src/lab/pattern.ts` computes the tiling and the stars and writes the `<svg>`. It runs at build time only, through the `sahra:lab-pattern` plugin in `vite.config.ts`, which replaces `%LAB_PATTERN%` in the page: the drawing is plain SVG in the HTML, so no script draws it, it paints with the page and cannot shift the layout. Unit tests (`pattern.test.ts`) check the tiling (sides 1, no gaps), the exact meeting points (law of sines), the eightfold symmetry, and that lines run straight across shared edges.
+   - The drawing is 960 by 640 units (3 by 2), four octagons tall, and covers its figure: 3 by 2 from `sm` up, a square on phones (`preserveAspectRatio="xMidYMid slice"` crops the sides and keeps the centre star in the middle). Strokes are in the drawing's units, so `src/lab/lab.css` sets thicker ones below 40rem to keep lines about 1 px wide.
+   - Three groups: the tiling's octagon outlines (the construction lines; the squares are the gaps between them), the small stars (dim, neutral-600) and the large stars (neutral-300; they lead). Every path has `pathLength="1"` and `--order` (0 at the centre tile, 1 at the farthest).
+   - `src/lab/lab.css` draws it: `stroke-dasharray: 1 1` and an animation of `stroke-dashoffset` from 1 to 0, delayed by `--order`. The grid sketches itself, the stars draw from the centre out (about 4 s in all), the grid fades to a faint trace, and a slow wave of amber light keeps passing outwards over the large stars (a `stroke` animation, every 10 s). At rest every line is whole, so with reduced motion nothing animates and the finished drawing shows.
+   - `src/lab/main.ts` only gates it: the figure (`.drawing`) has `is-offscreen` until an IntersectionObserver sees 30% of it, so on a short screen the drawing waits for the visitor, and the light pauses while it is off screen. "Draw it again" (shown only with JavaScript and motion allowed) sets `is-restarting` for a moment, which removes the animations so they start anew.
+   - Cost, measured with `requestAnimationFrame` in Chromium on a 2015 laptop GPU (Intel HD 4600), phone profile, CPU slowed four times: usually 60 fps both while drawing and with the light idling (over several runs on a busy machine: 52 to 60 idle, 43 to 60 drawing). The light repaints about 35 lines a frame, which is cheap where Chrome rasterizes on the GPU, as on phones. A compositor-only alternative (an amber ring blended over the drawing with `mix-blend-mode`) measured worse with a GPU and much worse without one, since a blended render surface costs more than the lines, so it was dropped. Measure on a real GPU (Playwright with `--use-angle=d3d11`): headless Chromium without one rasterizes and composites on the CPU, which makes SVG animation look several times slower than it is.
+
+## How the pages are built
+
+- Vite builds two pages (`build.rolldownOptions.input`: `home` is `index.html`, `lab` is `lab/index.html`), each with its own entry script (`src/main.ts`, `src/lab/main.ts`). `src/style.css` (Tailwind, fonts, theme) is shared: both pages load one `style-*.css`.
+- The modulepreload polyfill is off (`build.modulePreload.polyfill: false`): every browser this site supports has modulepreload, and the polyfill would be a shared script request on both pages.
 
 ## How the scene loads
 
@@ -102,7 +119,7 @@ GLSL lives in `src/scene/shaders/*.glsl`, imported as strings with Vite's `?raw`
 ## Testing conventions
 
 - **Unit tests (Vitest)** sit next to the code as `src/**/*.test.ts` and cover pure logic. Tests describe behaviour in plain words.
-- **End-to-end tests (Playwright)** live in `e2e/` and run against the production build (`pnpm build && pnpm preview` on port 3301), in two profiles: `desktop` (Desktop Chrome) and `mobile` (Pixel 7: small viewport, touch). Import `test` and `expect` from `e2e/test.ts`, never from `@playwright/test`: its automatic fixture fails any test whose page logs a console error or throws.
+- **End-to-end tests (Playwright)** live in `e2e/` (`home.spec.ts`, `lab.spec.ts`, `readability.spec.ts`, `no-webgl2.spec.ts`) and run against the production build (`pnpm build && pnpm preview` on port 3301), in two profiles: `desktop` (Desktop Chrome) and `mobile` (Pixel 7: small viewport, touch). Import `test` and `expect` from `e2e/test.ts`, never from `@playwright/test`: its automatic fixture fails any test whose page logs a console error or throws.
 - Every page gets an axe check (WCAG 2.2 AA tags plus best practices) with the scene running.
 - Motion is checked by comparing two screenshots of the canvas half a second apart, as raw bytes (`Buffer.equals`). Never `expect(buffer).toEqual(buffer)` on screenshots: when it fails, building the diff takes minutes.
 - Touch drags go through the DevTools protocol (`Input.dispatchTouchEvent`), since Playwright has no touch-drag helper; `sweepAcrossTheSand` in `e2e/home.spec.ts` uses it on the phone profile and the mouse elsewhere.
@@ -112,8 +129,8 @@ GLSL lives in `src/scene/shaders/*.glsl`, imported as strings with Vite's `?raw`
 
 ## Lighthouse and CI
 
-- `pnpm lighthouse` (after `pnpm build`) runs Lighthouse CI five times on the mobile preset against `dist/`, served by Lighthouse CI's own static server (gzip, like Vercel). It fails when the median of the five values (`aggregationMethod: "median"`, which absorbs up to two slow, cold runs) is below Performance 90 or Accessibility, Best Practices, SEO 95, or layout shift is above 0.01. Never use `median-run`: Lighthouse CI picks that run by its first paint and time to interactive, not by score, and it once passed a build whose scores were 77, 77, 78, 89 and 93. Reports land in `.lighthouseci/` (open the `.html` files).
-- CI machines have no GPU, so CI's Lighthouse measures what a visitor without one gets: the text and the poster, no Three.js. `scripts/check-lighthouse-path.ts` reports which page each run measured (the scene's script downloaded or not) and fails if the runs disagree or, with `LIGHTHOUSE_EXPECTS=poster` (set in CI), if any run measured the scene. The live scene's cost is measured where there is a GPU (`docs/performance.md`), and its weight is gated in CI by `pnpm size` (`scripts/check-sizes.ts`: page script, styles, the scene chunk and the posters against fixed budgets, after `pnpm build`).
+- `pnpm lighthouse` (after `pnpm build`) runs Lighthouse CI five times on the mobile preset against every page in `dist/` (it finds `index.html` and `lab/index.html` by itself), served by Lighthouse CI's own static server (gzip, like Vercel). The budgets apply to each page. It fails when the median of the five values (`aggregationMethod: "median"`, which absorbs up to two slow, cold runs) is below Performance 90 or Accessibility, Best Practices, SEO 95, or layout shift is above 0.01. Never use `median-run`: Lighthouse CI picks that run by its first paint and time to interactive, not by score, and it once passed a build whose scores were 77, 77, 78, 89 and 93. Reports land in `.lighthouseci/` (open the `.html` files).
+- CI machines have no GPU, so CI's Lighthouse measures what a visitor without one gets: the text and the poster, no Three.js. `scripts/check-lighthouse-path.ts` reports which version of the home page each run measured (the scene's script downloaded or not) and fails if those runs disagree or, with `LIGHTHOUSE_EXPECTS=poster` (set in CI), if any measured the scene; it also fails if another page (the Lab) loaded the scene. Locally, with a GPU, the home page's runs measure the live scene: run it without `LIGHTHOUSE_EXPECTS`. The live scene's cost is measured where there is a GPU (`docs/performance.md`), and its weight is gated in CI by `pnpm size` (`scripts/check-sizes.ts`, after `pnpm build`: the home page's script, the shared styles, the scene chunk, the font, the posters, and the Lab's page with its drawing, its script and its styles, against fixed budgets).
 - Lighthouse's own injected script (`_lighthouse-eval.js`) sometimes shows up as a long task of up to a second or so, mostly in the first, cold run; it is noise in Total Blocking Time that the median absorbs.
 - The metric to watch is Total Blocking Time: Lighthouse simulates a slow phone CPU (4x), and Three.js's startup shows up there.
 - GitHub Actions (`.github/workflows/ci.yml`) runs on pushes to `main` and on pull requests, in three jobs: format, lint, typecheck and unit tests; end-to-end tests; Lighthouse. Each job sets up through `.github/actions/setup` (pnpm from `packageManager`, Node from `engines.node`, frozen lockfile). Lighthouse reports are uploaded as an artifact on every run, the Playwright report on failure.
@@ -153,9 +170,14 @@ Playwright reuses a server already running on port 3301 outside CI, so stop any 
 
 ```
 index.html           home page: text layer, poster, font preload, icon (content first, scripts after)
+lab/index.html       the Lab page; %LAB_PATTERN% becomes the drawing at build time
 src/
   config.ts          SITE_NAME, the single place for the project name
   main.ts            entry for the home page: waits for idle, checks WebGL2, lazy-loads the scene
+  lab/
+    pattern.ts       the Lab's drawing: tiling, Hankin's stars, the SVG (build time; pattern.test.ts)
+    lab.css          draws it: dash offsets from the centre out, the grid fading back, the light
+    main.ts          entry for the Lab: holds the drawing until on screen, "Draw it again"
   style.css          Tailwind, the font faces, theme tokens (font, accent), the text scrim
   fonts/             Instrument Sans (Latin, variable weight) and its OFL licence
   favicon.svg        the icon
@@ -185,7 +207,7 @@ scripts/
   actions/setup/     shared pnpm + Node + install steps
 lighthouserc.json    Lighthouse CI: runs, Chrome flags, score budgets
 vercel.json          Vercel: long caching for /assets/
-vite.config.ts       Tailwind plugin, %SITE_NAME% plugin, ports, chunk size limit
+vite.config.ts       Tailwind, the %SITE_NAME% and %LAB_PATTERN% plugins, the two pages, ports
 vitest.config.ts     unit tests: src/**/*.test.ts
 playwright.config.ts desktop + mobile profiles against the production build
 tsconfig.json        app code (browser types)
@@ -194,4 +216,4 @@ tsconfig.node.json   config files, e2e/ and scripts/ (Node types, plus DOM for c
 
 ## Status
 
-Phases 0 to 3 done and live (scene, light, poster, adaptive quality; measurements in `docs/performance.md`). Phase 4 (text layer) on `feature/sahra-content-layer` (PR #3); the Calendly booking was dropped, the action is "Hire on Upwork". Phases: 0 setup, 1 scene prototype, 2 art direction, 3 performance and adaptivity, 4 content layer and booking, 5 Lab, 6 embeddable package, 7 docs and portfolio packaging.
+Phases 0 to 4 done and live (scene, light, poster, adaptive quality, text layer; measurements in `docs/performance.md`; the Calendly booking was dropped, the action is "Hire on Upwork"). Phase 5 (the Lab) is in progress on `feature/sahra-lab`: the self-drawing pattern is done, the GSAP scroll story is next. Phases: 0 setup, 1 scene prototype, 2 art direction, 3 performance and adaptivity, 4 content layer and booking, 5 Lab, 6 embeddable package, 7 docs and portfolio packaging.

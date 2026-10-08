@@ -13,24 +13,35 @@ const ASSETS_DIR = "dist/assets";
 
 interface Budget {
   name: string;
+  /** The folder the file is in; the hashed build assets unless given. */
+  dir?: string;
   file: RegExp;
   maxKb: number;
   gzip: boolean;
 }
 
 const BUDGETS: Budget[] = [
-  { name: "page script", file: /^index-[\w-]+\.js$/, maxKb: 5, gzip: true },
-  { name: "styles", file: /^index-[\w-]+\.css$/, maxKb: 15, gzip: true },
+  { name: "home page script", file: /^home-[\w-]+\.js$/, maxKb: 5, gzip: true },
+  { name: "styles (both pages)", file: /^style-[\w-]+\.css$/, maxKb: 15, gzip: true },
   { name: "scene (Three.js and shaders)", file: /^scene-[\w-]+\.js$/, maxKb: 145, gzip: true },
   { name: "font", file: /^instrument-sans-latin-wght-[\w-]+\.woff2$/, maxKb: 35, gzip: false },
   { name: "phone poster", file: /^poster-portrait-860-[\w-]+\.webp$/, maxKb: 100, gzip: false },
   { name: "laptop poster", file: /^poster-landscape-1440-[\w-]+\.webp$/, maxKb: 80, gzip: false },
+  {
+    name: "Lab page, with its drawing",
+    dir: "dist/lab",
+    file: /^index\.html$/,
+    maxKb: 8,
+    gzip: true,
+  },
+  { name: "Lab script", file: /^lab-[\w-]+\.js$/, maxKb: 2, gzip: true },
+  { name: "Lab styles", file: /^lab-[\w-]+\.css$/, maxKb: 2, gzip: true },
 ];
 
-const files = readdirSync(ASSETS_DIR);
 let failed = false;
 for (const budget of BUDGETS) {
-  const matches = files.filter((file) => budget.file.test(file));
+  const dir = budget.dir ?? ASSETS_DIR;
+  const matches = readdirSync(dir).filter((file) => budget.file.test(file));
   if (matches.length !== 1) {
     console.error(
       `${budget.name}: expected one file matching ${String(budget.file)}, found ${String(matches.length)}`,
@@ -39,7 +50,7 @@ for (const budget of BUDGETS) {
     continue;
   }
   const [file] = matches as [string];
-  const bytes = readFileSync(`${ASSETS_DIR}/${file}`);
+  const bytes = readFileSync(`${dir}/${file}`);
   const kb = (budget.gzip ? gzipSync(bytes).length : bytes.length) / 1024;
   const over = kb > budget.maxKb;
   failed ||= over;
