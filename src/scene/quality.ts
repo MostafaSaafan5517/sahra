@@ -68,6 +68,11 @@ export function initialTier(signals: DeviceSignals): number {
   return memoryGb >= 4 ? MEDIUM : LOW;
 }
 
+/** The index into QUALITY_TIERS of the tier with this name, or -1 when there is none. */
+export function tierNamed(name: string | undefined): number {
+  return QUALITY_TIERS.findIndex((tier) => tier.name === name);
+}
+
 /** The WebGL renderer's name (the GPU, or the software renderer), when the browser shares it. */
 export function rendererName(gl: WebGL2RenderingContext): string {
   const info = gl.getExtension("WEBGL_debug_renderer_info");

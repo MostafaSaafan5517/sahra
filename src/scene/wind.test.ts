@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createCamera } from "./camera";
-import { GustField, GustTrail, MAX_GUSTS, groundPoint } from "./wind";
+import { GustField, GustTrail, MAX_GUSTS, groundPoint, pointInBox } from "./wind";
 
 const WIDTH = 1600;
 const HEIGHT = 900;
@@ -128,5 +128,22 @@ describe("GustTrail", () => {
     gusts.move(800, HEIGHT * 0.05, 10, WIDTH, HEIGHT);
     gusts.move(900, HEIGHT * 0.05, 10.05, WIDTH, HEIGHT);
     expect(activeSlots(field, 10)).toEqual([]);
+  });
+});
+
+describe("pointInBox", () => {
+  const box = { left: 100, top: 300, width: 640, height: 360 };
+
+  it("measures a pointer from the box's top left corner", () => {
+    expect(pointInBox(100, 300, box)).toEqual({ x: 0, y: 0 });
+    expect(pointInBox(420, 480, box)).toEqual({ x: 320, y: 180 });
+    expect(pointInBox(740, 660, box)).toEqual({ x: 640, y: 360 });
+  });
+
+  it("says nothing for a pointer outside the box", () => {
+    expect(pointInBox(99, 400, box)).toBeNull();
+    expect(pointInBox(400, 299, box)).toBeNull();
+    expect(pointInBox(741, 400, box)).toBeNull();
+    expect(pointInBox(400, 661, box)).toBeNull();
   });
 });

@@ -74,18 +74,18 @@ The project name lives only in `src/config.ts` (`SITE_NAME`). HTML pages use the
 ## How the scene loads
 
 1. The HTML holds the content and an empty, `aria-hidden` scene container (`[data-scene]`, fixed behind the content), so the content paints with almost no JavaScript (the entry script is about 1.5 kB gzipped).
-2. `src/main.ts` waits for the `load` event and then an idle moment, so the scene never competes with the content's first paint.
-3. It creates the canvas and a WebGL2 context itself, before downloading anything, asking with `failIfMajorPerformanceCaveat` (and checking the renderer's name too). No WebGL2 (`unsupported`) or WebGL only in software (`low-power`: no GPU, so SwiftShader and the like; slow, and it makes the whole page sluggish) means the poster stays and Three.js is never downloaded. `?quality` in the URL (any value) asks for the scene anyway.
+2. `src/main.ts` waits for the `load` event and then an idle moment, so the scene never competes with the content's first paint, and calls `mountScene` (`src/scene/mount.ts`) with the URL's flags: `?quality` (`force` and `lockedTier`), `?debug`, `?tune`. The scene reads no URL itself.
+3. `mountScene` creates the canvas and a WebGL2 context itself, before downloading anything, asking with `failIfMajorPerformanceCaveat` (and checking the renderer's name too). No WebGL2 (`unsupported`) or WebGL only in software (`low-power`: no GPU, so SwiftShader and the like; slow, and it makes the whole page sluggish) means the poster stays and Three.js is never downloaded. `?quality` in the URL (any value) asks for the scene anyway.
 4. Only then is `src/scene/scene.ts` imported. It is a separate chunk (Three.js, about 130 kB gzipped), and Three.js reuses that context.
 5. Startup runs in short tasks (`nextTask()` between creating the renderer, building the grains and compiling), so the browser can respond in between. Shaders compile with `renderer.compileAsync` (non-blocking where the browser supports parallel shader compilation); the first frame is drawn, and only then does the canvas fade in.
 6. With `prefers-reduced-motion: reduce`, one still frame is drawn and no animation loop starts.
 
-The container's `data-state` records the scene's state: `unsupported` (no WebGL2), `running` (on screen), `failed` (could not start), `lost` (the browser took WebGL away for now; Three.js restores itself and the state returns to `running`) or `low-power` (too slow even at the lightest quality). CSS shows the canvas only while `running`, so in every other state the poster beneath it shows. Tests wait on the state instead of on timers.
+The container's `data-state` records the scene's state: `unsupported` (no WebGL2), `running` (on screen), `failed` (could not start), `lost` (the browser took WebGL away for now; Three.js restores itself and the state returns to `running`) or `low-power` (too slow even at the lightest quality). The canvas shows only while `running` (its opacity and fade are inline styles set by `mountScene`, so they work on any page, not only with this site's CSS), so in every other state the poster beneath it shows. Tests wait on the state instead of on timers.
 
 ## Adaptive quality, pausing and cleanup
 
 - `quality.ts` defines four tiers, `high`, `medium`, `low` and `minimal`, each with fewer grains (lines times points per line) and a lower pixel-ratio cap. `initialTier` picks the starting one from the device: a software WebGL renderer (SwiftShader, llvmpipe) starts at `minimal`; data saver, two cores or two GB of memory at `low`; desktops with four cores or more at `high`; phones by memory and cores (Safari reports no memory: treated as 4 GB, so `medium`).
-- `frame-monitor.ts` judges the frame rate: after a one-second warmup it looks at a 1.5 s window, and when the 75th-percentile frame takes longer than the budget it is given, it says so and starts over. Above 22 ms (below about 45 fps) the scene steps down one tier (new geometry, new pixel ratio). It never steps up: no flip-flopping. At `minimal` the budget is 40 ms (below about 25 fps), because giving up for the poster is a much bigger step than a lighter tier. (Software-only WebGL never gets here: `main.ts` shows the poster instead, unless `?quality` asks for the scene.) A slow verdict at `minimal` freezes the scene and reports `low-power`; `main.ts` lets the canvas fade out to the poster, then calls `stop()` and removes the canvas.
+- `frame-monitor.ts` judges the frame rate: after a one-second warmup it looks at a 1.5 s window, and when the 75th-percentile frame takes longer than the budget it is given, it says so and starts over. Above 22 ms (below about 45 fps) the scene steps down one tier (new geometry, new pixel ratio). It never steps up: no flip-flopping. At `minimal` the budget is 40 ms (below about 25 fps), because giving up for the poster is a much bigger step than a lighter tier. (Software-only WebGL never gets here: `mountScene` does not start the scene there, unless `?quality` asks for it.) A slow verdict at `minimal` freezes the scene and reports `low-power`; `mountScene` lets the canvas fade out to the poster, then calls `stop()` and removes the canvas.
 - The loop runs only when it is worth it: not with reduced motion, not while the tab is hidden (`visibilitychange`), not while the canvas is off screen (IntersectionObserver; matters for embeds), not while WebGL is lost, not after `low-power` or `stop()`. The scene's clock stands still while paused, so it resumes where it left off, and the monitor restarts on resume (it has no pause logic of its own, so any long gap it sees is a slow frame).
 - `?quality=high|medium|low|minimal` locks the tier and turns adaptation off (no stepping down, no giving up): for screen recordings and comparing tiers by eye. `?quality=auto` keeps the automatic tiers. Any `?quality` also runs the scene on software-only WebGL. Headless Chromium has only software WebGL, so on the plain URL the end-to-end tests see the poster (one test checks exactly that); tests about the running scene use `STEADY_SCENE` (`/?quality=minimal`), tests about adaptation `ADAPTIVE_SCENE` (`/?quality=auto`).
 - `?debug` opens an overlay (`debug.ts`, its own lazy chunk) with the frame rate, the slowest quarter of frames, the tier, grains, pixel ratio, canvas size, state and renderer, updated every second. It is how the real-device numbers in `docs/performance.md` are measured.
@@ -120,6 +120,7 @@ GLSL lives in `src/scene/shaders/*.glsl`, imported as strings with Vite's `?raw`
 ## How the gusts work
 
 - `wind.ts` turns pointer and finger movement into gusts: each has a ground position (the screen point projected onto a plane at the dunes' average height; nothing in the sky), a direction, a strength from the pointer's speed, and a start time on the shader's clock (`performance.now()` seconds, like `uTime`).
+- Movement is measured within the canvas's own box (`pointInBox`), and leaving the box ends the stroke; on the home page the box is the whole window.
 - Gusts live in `GustField`: two flat `Float32Array`s that are the uniform values themselves (`uGustOrigins`, `uGustDirections`), `MAX_GUSTS` slots, the oldest replaced first. The vertex shader loops over them: each pushes nearby sand along its direction, scatters and lifts it, then lets it settle over the gust's life.
 - `GustTrail` makes at most one gust per `gustLife / MAX_GUSTS` seconds, so a slot is never reused while its gust is still blowing (the sand would snap back). A stroke needs two samples for a speed; a pause over 0.25 s or a lifted finger starts a new stroke.
 - Mouse and pen use pointer events; fingers use passive touch events, which keep arriving while the browser scrolls or zooms and never block either. Listeners are attached only when the scene animates (not with reduced motion).
@@ -186,7 +187,7 @@ index.html           home page: text layer, poster, font preload, icon (content 
 lab/index.html       the Lab page; %LAB_PATTERN% becomes the drawing at build time
 src/
   config.ts          SITE_NAME, the single place for the project name
-  main.ts            entry for the home page: waits for idle, checks WebGL2, lazy-loads the scene
+  main.ts            entry for the home page: reads its URL flags, mounts the scene when idle
   when-idle.ts       whenPageIsIdle: after the load event and an idle moment (both pages)
   lab/
     pattern.ts       the Lab's drawing: tiling, Hankin's stars, the SVG (build time; pattern.test.ts)
@@ -201,6 +202,7 @@ src/
   favicon.svg        the icon
   poster/            the poster, landscape and portrait WebP at several widths (pnpm poster)
   scene/
+    mount.ts         checks WebGL2, adds the canvas, loads the scene, keeps data-state
     scene.ts         renderer, dunes, sky, uniforms, render loop, tiers, pausing, stop(), ?tune wiring
     quality.ts       quality tiers and the starting tier from device signals (quality.test.ts)
     frame-monitor.ts judges the frame rate for stepping quality down (frame-monitor.test.ts)
