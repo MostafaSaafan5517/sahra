@@ -39,24 +39,30 @@ function createSceneContext(
 }
 
 export interface MountOptions {
-  /** Run the scene even on software-only WebGL (the home page's `?quality`). */
+  /**
+   * Run the scene even on software-only WebGL (the home page's `?quality`, an embed's
+   * `data-quality`).
+   */
   force: boolean;
   /** Passed on to the scene. */
   scene: Omit<SceneOptions, "animate" | "onStateChange">;
+  /** The positioned element the canvas covers; the container itself unless given. */
+  layer?: HTMLElement;
 }
 
 /**
- * Adds the scene to the container, which must be positioned, as the canvas covers it, and
- * records the scene's state in the container's `data-state`: `unsupported` (no WebGL2), `low-power` (WebGL only in software, or too slow even at the lightest quality),
+ * Adds the scene to the container (or the layer given), which must be positioned, as the canvas
+ * covers it, and records the scene's state in the container's `data-state`: `unsupported` (no
+ * WebGL2), `low-power` (WebGL only in software, or too slow even at the lightest quality),
  * `running` (on screen), `failed` (could not start) or `lost` (WebGL taken away for now). The
  * canvas shows only while `running`, fading in over whatever the container shows beneath it (the
- * home page's poster).
+ * home page's poster, an embed's background).
  * Resolves with the scene, or nothing when it did not start; once it has gone low power, the
  * scene stops and its canvas is removed by itself.
  */
 export async function mountScene(
   container: HTMLElement,
-  { force, scene: sceneOptions }: MountOptions,
+  { force, scene: sceneOptions, layer = container }: MountOptions,
 ): Promise<SceneHandle | undefined> {
   const canvas = document.createElement("canvas");
   const context = createSceneContext(canvas, force);
@@ -78,7 +84,7 @@ export async function mountScene(
     container.dataset.state = state;
     canvas.style.opacity = state === "running" ? "1" : "0";
   };
-  container.append(canvas);
+  layer.append(canvas);
   try {
     const { startScene } = await import("./scene");
     const scene = await startScene(canvas, context, {

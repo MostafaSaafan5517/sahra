@@ -13,8 +13,8 @@ import {
 import { createCamera, FAR_DEPTH, FIELD_OF_VIEW, NEAR_DEPTH } from "./camera";
 import { createDuneGeometry, seededRandom } from "./dunes";
 import { FrameMonitor } from "./frame-monitor";
-import { lightAt, SUN_GLOW } from "./lighting";
-import { initialTier, QUALITY_TIERS, qualityTier, readDeviceSignals, tierNamed } from "./quality";
+import { type Light, lightAt, SUN_GLOW } from "./lighting";
+import { QUALITY_TIERS, qualityTier, readDeviceSignals, startingTier, tierNamed } from "./quality";
 import { SCENE_SETTINGS } from "./settings";
 import fragmentShader from "./shaders/dunes.frag.glsl?raw";
 import duneVertexShader from "./shaders/dunes.vert.glsl?raw";
@@ -53,6 +53,10 @@ export interface SceneOptions {
    * nothing, lets the quality adapt to the frame rate.
    */
   lockedTier?: string | undefined;
+  /** The best tier an adaptive scene may start at (an embed's `data-density`). */
+  highestTier?: string | undefined;
+  /** A fixed light. Without one, the light moves through the day from `startPhase`. */
+  light?: Light | undefined;
   /** Opens the frame-rate overlay (the home page's `?debug`). */
   debug?: boolean;
   /** Opens the tuning panel (the home page's `?tune`). */
@@ -82,7 +86,7 @@ export interface SceneHandle {
 export async function startScene(
   canvas: HTMLCanvasElement,
   context: WebGL2RenderingContext,
-  { animate, onStateChange, lockedTier, debug, tune }: SceneOptions,
+  { animate, onStateChange, lockedTier, highestTier, light: fixedLight, debug, tune }: SceneOptions,
 ): Promise<SceneHandle> {
   const renderer = new WebGLRenderer({ canvas, context });
   renderer.setClearColor(BACKGROUND);
@@ -90,11 +94,12 @@ export async function startScene(
 
   const camera = createCamera(1);
   const gusts = new GustField();
-  const light = lightAt(SCENE_SETTINGS.startPhase);
+  // The light the shaders get; with no fixed light, render() moves it through the day.
+  const light = fixedLight ? structuredClone(fixedLight) : lightAt(SCENE_SETTINGS.startPhase);
   const signals = readDeviceSignals(context);
   const locked = tierNamed(lockedTier);
   const adaptive = locked === -1;
-  let tierIndex = adaptive ? initialTier(signals) : locked;
+  let tierIndex = adaptive ? startingTier(signals, highestTier) : locked;
 
   // The scene's clock, in seconds: starts at `startTime` with the first frame and stands still
   // while the scene is paused. Animation frames and pointer events both read it.
@@ -200,7 +205,7 @@ export async function startScene(
   function render(timeMs: number): void {
     const seconds = sceneSeconds(timeMs);
     time.value = seconds;
-    lightAt(phaseAt(seconds), light);
+    if (!fixedLight) lightAt(phaseAt(seconds), light);
     duneUniforms.uSandLit.value.fromArray(light.sandLit);
     duneUniforms.uSandShade.value.fromArray(light.sandShade);
     duneUniforms.uSun.value.fromArray(light.sun);

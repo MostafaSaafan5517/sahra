@@ -70,11 +70,29 @@ The project name lives only in `src/config.ts` (`SITE_NAME`). HTML pages use the
 - Vite builds two pages (`build.rolldownOptions.input`: `home` is `index.html`, `lab` is `lab/index.html`), each with its own entry script (`src/main.ts`, `src/lab/main.ts`).
 - What both pages load is grouped into one chunk with a plain name (`output.codeSplitting.groups`, name `shared`): `src/style.css` (Tailwind, fonts, theme) becomes `shared-*.css`, and `src/when-idle.ts` with Vite's preload helper (both pages load chunks on demand) `shared-*.js`. Without the group, Rolldown names the shared chunk after whichever module comes first (it once came out as `preload-helper-*.css`).
 - The modulepreload polyfill is off (`build.modulePreload.polyfill: false`): every browser this site supports has modulepreload, and the polyfill would be a shared script request on both pages.
+- `pnpm build` then runs a second build, `vite.embed.config.ts`, for the embed and its demo page into `dist/embed/` (see "The embed").
+
+## The embed
+
+The scene as an embed for any site (Webflow, WordPress, Framer, plain HTML): a container and one script.
+
+```html
+<div data-sahra style="height: 480px"></div>
+<script type="module" src="https://sahra-khaki.vercel.app/embed/sahra.js"></script>
+```
+
+- `src/embed/sahra.ts` is a small loader (about 3 kB gzipped). It mounts every `[data-sahra]` container on the page, and any added later (a MutationObserver, for single-page apps); `mount(element)` is exported for containers it cannot see. Each starts once it is within 200 px of the screen (IntersectionObserver) and the page is idle, so a box far down a page costs nothing until the visitor gets there. Then `mountScene` checks WebGL2 and only where it runs on a GPU loads the scene, `assets/sahra-scene-*.js` beside the loader (Three.js, about 134 kB gzipped): a page pays for the scene only where it can show.
+- The scene goes in a layer the loader adds as the container's first child (`position: absolute`, `z-index: -1`, `overflow: hidden`, `border-radius: inherit`, `aria-hidden`); the container gets `isolation: isolate` (and `position: relative` if it was static), so the container's own content stays above the scene, and rounded corners clip it. Its own background shows until the scene fades in, and stays where it cannot run. `data-state` on the container says how it went, as on the home page.
+- Options are data attributes, read by `embedOptions` (`src/embed/options.ts`, unit-tested): `data-light` (`cycle`, the default, or `dawn`, `midday`, `dusk`), five colours (`data-sky`, `data-horizon`, `data-ground`, `data-sand`, `data-shade`, as `#rgb` or `#rrggbb`; any colour holds the light, dusk unless `data-light` names another), `data-density` (`high`, `medium`, `low`, `minimal`: the best tier the scene may start at, via `startingTier` in `quality.ts`), and `data-quality` (like the home page's `?quality`, for tests and recordings). Anything it cannot use is named in a `console.warn` and left out; the scene starts anyway.
+- Gusts are measured within the canvas's own box (`pointInBox` in `wind.ts`), so a scene in one section of a page answers to the pointer over it, and leaving the box ends the stroke. On the home page the box is the whole window, as before.
+- A container taken out of the page releases its scene (`stop()`: listeners, observers, GPU memory). Several containers on a page each get their own scene (each its own WebGL context; browsers allow about sixteen).
+- Built by `vite.embed.config.ts` (`root: embed`, `base: "./"`) into `dist/embed/`: `sahra.js` keeps its name (other sites link to it), every other file has a hash in its name, and every path between them is relative, resolved against the script's own URL, never the embedding page. No modulepreload helper. `embed/index.html` is the demo page at `/embed/`: plain HTML with its own small stylesheet and none of the site's, two boxes (as it comes; held dawn light, moonlit colours, low density, with text inside) and the code to copy.
+- Module scripts load across origins only with CORS headers: Vite's preview server allows `localhost` origins by default (which the tests use); Vercel needs its own (see `vercel.json`).
 
 ## How the scene loads
 
 1. The HTML holds the content and an empty, `aria-hidden` scene container (`[data-scene]`, fixed behind the content), so the content paints with almost no JavaScript (the entry script is about 1.5 kB gzipped).
-2. `src/main.ts` waits for the `load` event and then an idle moment, so the scene never competes with the content's first paint, and calls `mountScene` (`src/scene/mount.ts`) with the URL's flags: `?quality` (`force` and `lockedTier`), `?debug`, `?tune`. The scene reads no URL itself.
+2. `src/main.ts` waits for the `load` event and then an idle moment, so the scene never competes with the content's first paint, and calls `mountScene` (`src/scene/mount.ts`, shared with the embed) with the URL's flags: `?quality` (`force` and `lockedTier`), `?debug`, `?tune`. The scene reads no URL itself.
 3. `mountScene` creates the canvas and a WebGL2 context itself, before downloading anything, asking with `failIfMajorPerformanceCaveat` (and checking the renderer's name too). No WebGL2 (`unsupported`) or WebGL only in software (`low-power`: no GPU, so SwiftShader and the like; slow, and it makes the whole page sluggish) means the poster stays and Three.js is never downloaded. `?quality` in the URL (any value) asks for the scene anyway.
 4. Only then is `src/scene/scene.ts` imported. It is a separate chunk (Three.js, about 130 kB gzipped), and Three.js reuses that context.
 5. Startup runs in short tasks (`nextTask()` between creating the renderer, building the grains and compiling), so the browser can respond in between. Shaders compile with `renderer.compileAsync` (non-blocking where the browser supports parallel shader compilation); the first frame is drawn, and only then does the canvas fade in.
@@ -135,6 +153,7 @@ GLSL lives in `src/scene/shaders/*.glsl`, imported as strings with Vite's `?raw`
 - Motion is checked by comparing two screenshots of the canvas half a second apart, as raw bytes (`Buffer.equals`). Never `expect(buffer).toEqual(buffer)` on screenshots: when it fails, building the diff takes minutes.
 - Touch drags go through the DevTools protocol (`Input.dispatchTouchEvent`), since Playwright has no touch-drag helper; `sweepAcrossTheSand` in `e2e/home.spec.ts` uses it on the phone profile and the mouse elsewhere.
 - Browser launch flags (`launchOptions`) can only be set at the top of a spec file, so a test that needs a different browser (like `e2e/no-webgl2.spec.ts`, which runs Chromium with `--disable-webgl2`) gets its own file.
+- `e2e/embed.spec.ts` embeds the scene in another site: Playwright serves a page at `http://host.localhost:3399/` itself, and that page loads `embed/sahra.js` from the preview server, so the script and the scene's chunk load across origins, as from Webflow or WordPress. Chrome asks permission before a page fetches from the machine's own address (local network access), which a real site loading from this site's domain never needs, so that check is off in this file (`--disable-features=LocalNetworkAccessChecks`); CORS still applies. Boxes there use `data-quality="minimal"` to run on headless Chromium's software WebGL.
 - Headless Chromium renders WebGL in software (Playwright passes `--enable-unsafe-swiftshader`), so the scene tests work on CI machines without a GPU. It is slow: measured on the dune scene, about 60 frames a second at desktop size but about 12 on the phone profile, where drawing the large near grains dominates. Two such pages at once starve each other (even the canvas fade-in stalls), so Playwright runs with one worker.
 - Scroll story tests wait for `storyPins` in `e2e/lab.spec.ts` (the section `data-enhanced` and both pin spacers given their padding) before reading any position: right after GSAP starts, ScrollTrigger has not laid out the pins yet. They scroll with `scrollTo` and poll, since `scrub` makes the motion trail the scroll.
 - Layout stability is tested two ways on the Lab: the summed layout shift while it loads (with its script held back half a second, as on a slow phone) and, deterministically, `lays out the same before and after its script runs` (the script served empty, then normally; every part down to the story's first pin must sit in the same place). Whether the first paint comes before a module script depends on the machine, so the timing test alone can pass locally and fail on CI.
@@ -165,6 +184,7 @@ GLSL lives in `src/scene/shaders/*.glsl`, imported as strings with Vite's `?raw`
 
 ```bash
 pnpm dev            # dev server on http://localhost:3300
+pnpm dev:embed      # the embed's demo page with its own dev server, on http://localhost:3304
 pnpm build          # production build into dist/
 pnpm preview        # serve dist/ on http://localhost:3301
 pnpm typecheck      # app code (tsconfig.json) and config files (tsconfig.node.json)
@@ -189,6 +209,9 @@ src/
   config.ts          SITE_NAME, the single place for the project name
   main.ts            entry for the home page: reads its URL flags, mounts the scene when idle
   when-idle.ts       whenPageIsIdle: after the load event and an idle moment (both pages)
+  embed/
+    sahra.ts         the embed's loader: finds [data-sahra] boxes, starts each near the screen
+    options.ts       reads a box's data attributes into scene options (options.test.ts)
   lab/
     pattern.ts       the Lab's drawing: tiling, Hankin's stars, the SVG (build time; pattern.test.ts)
     lab.css          draws it: dash offsets from the centre out, the grid fading back, the light;
@@ -202,7 +225,7 @@ src/
   favicon.svg        the icon
   poster/            the poster, landscape and portrait WebP at several widths (pnpm poster)
   scene/
-    mount.ts         checks WebGL2, adds the canvas, loads the scene, keeps data-state
+    mount.ts         checks WebGL2, adds the canvas, loads the scene, keeps data-state (home, embed)
     scene.ts         renderer, dunes, sky, uniforms, render loop, tiers, pausing, stop(), ?tune wiring
     quality.ts       quality tiers and the starting tier from device signals (quality.test.ts)
     frame-monitor.ts judges the frame rate for stepping quality down (frame-monitor.test.ts)
@@ -230,6 +253,8 @@ scripts/
 lighthouserc.json    Lighthouse CI: runs, Chrome flags, score budgets
 vercel.json          Vercel: long caching for /assets/
 vite.config.ts       Tailwind, the %SITE_NAME% and %LAB_PATTERN% plugins, the two pages, ports
+vite.embed.config.ts the embed and its demo page, into dist/embed/ (relative paths, fixed sahra.js)
+embed/index.html     the embed's demo page (plain HTML, at /embed/)
 vitest.config.ts     unit tests: src/**/*.test.ts
 playwright.config.ts desktop + mobile profiles against the production build
 tsconfig.json        app code (browser types)
@@ -238,4 +263,4 @@ tsconfig.node.json   config files, e2e/ and scripts/ (Node types, plus DOM for c
 
 ## Status
 
-Phases 0 to 4 done and live (scene, light, poster, adaptive quality, text layer; measurements in `docs/performance.md`; the Calendly booking was dropped, the action is "Hire on Upwork"). Phase 5 (the Lab) is on `feature/sahra-lab` (draft PR #4): the self-drawing pattern and the GSAP scroll story are done; next, Mostafa's review on his phone, then merge. Phases: 0 setup, 1 scene prototype, 2 art direction, 3 performance and adaptivity, 4 content layer and booking, 5 Lab, 6 embeddable package, 7 docs and portfolio packaging.
+Phases 0 to 5 done and live (scene, light, poster, adaptive quality, text layer, the Lab; measurements in `docs/performance.md`; the Calendly booking was dropped, the action is "Hire on Upwork"). Phase 6 (the embed) in progress on `feature/sahra-embed`: the embed, its options and its demo page are done; next, `docs/embedding.md` (Webflow, WordPress) and Vercel's CORS headers. Phases: 0 setup, 1 scene prototype, 2 art direction, 3 performance and adaptivity, 4 content layer and booking, 5 Lab, 6 embeddable package, 7 docs and portfolio packaging.

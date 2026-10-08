@@ -73,6 +73,14 @@ export function tierNamed(name: string | undefined): number {
   return QUALITY_TIERS.findIndex((tier) => tier.name === name);
 }
 
+/**
+ * Where an adaptive scene starts: the device's own guess (`initialTier`), but never above
+ * `highest` when it names a tier (an embed's `data-density`). A lighter guess stays lighter.
+ */
+export function startingTier(signals: DeviceSignals, highest?: string): number {
+  return Math.max(initialTier(signals), tierNamed(highest));
+}
+
 /** The WebGL renderer's name (the GPU, or the software renderer), when the browser shares it. */
 export function rendererName(gl: WebGL2RenderingContext): string {
   const info = gl.getExtension("WEBGL_debug_renderer_info");
