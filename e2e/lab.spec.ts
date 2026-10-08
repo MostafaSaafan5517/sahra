@@ -96,7 +96,14 @@ test("reaches every link and button from the keyboard, with a visible focus ring
   }
 });
 
-test("moves nothing while it loads: no layout shift", async ({ page }) => {
+test("moves nothing while it loads, even when its script comes late: no layout shift", async ({
+  page,
+}) => {
+  // A slow phone paints the page before the script runs; holding the script back makes that sure.
+  await page.route(/\/assets\/lab-[\w-]+\.js$/, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await route.continue();
+  });
   await page.goto(LAB);
   const shift = await page.evaluate(
     () =>
@@ -113,6 +120,33 @@ test("moves nothing while it loads: no layout shift", async ({ page }) => {
       }),
   );
   expect(shift).toBe(0);
+});
+
+test("lays out the same before and after its script runs", async ({ page }) => {
+  // Where the page's parts sit (top and height), from the top of the page.
+  const layout = () =>
+    page.evaluate(() =>
+      ["h1", "#drawing-title", ".drawing", ".drawing + div", "footer"].map((selector) => {
+        const box = document.querySelector(selector)?.getBoundingClientRect();
+        return {
+          selector,
+          top: Math.round((box?.top ?? NaN) + scrollY),
+          height: Math.round(box?.height ?? NaN),
+        };
+      }),
+    );
+  // As a visitor sees it before the script has run (or without it): the script comes back empty.
+  await page.route(/\/assets\/lab-[\w-]+\.js$/, (route) =>
+    route.fulfill({ contentType: "text/javascript", body: "" }),
+  );
+  await page.goto(LAB);
+  const before = await layout();
+  await page.unrouteAll();
+
+  // Once the script has run and shown "Draw it again".
+  await page.goto(LAB);
+  await expect(page.getByRole("button", { name: "Draw it again" })).toBeVisible();
+  expect(await layout()).toEqual(before);
 });
 
 test("draws the pattern from the center out, then shows it whole", async ({ page }) => {

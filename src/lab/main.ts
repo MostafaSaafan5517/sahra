@@ -16,7 +16,7 @@ if (drawing && matchMedia("(prefers-reduced-motion: no-preference)").matches) {
   ).observe(drawing);
 
   if (redraw) {
-    redraw.hidden = false;
+    redraw.classList.remove("invisible");
     redraw.addEventListener("click", () => {
       drawing.classList.add("is-restarting");
       // Reading the layout applies the class at once, so the animations stop; removing the class

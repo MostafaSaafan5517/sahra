@@ -79,11 +79,11 @@
               reduced motion it shows as a finished drawing.
             </p>
           </div>
+          <!-- Invisible, not hidden: its room is kept until the script shows it, so nothing moves. -->
           <button
             type="button"
-            hidden
             data-redraw
-            class="mt-8 rounded-full border border-neutral-700 px-5 py-2.5 text-sm font-medium text-neutral-100 transition-colors hover:border-accent hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent motion-safe:active:translate-y-px"
+            class="invisible mt-8 rounded-full border border-neutral-700 px-5 py-2.5 text-sm font-medium text-neutral-100 transition-colors hover:border-accent hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent motion-safe:active:translate-y-px"
           >
             Draw it again
           </button>
