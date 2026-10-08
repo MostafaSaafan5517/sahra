@@ -86,8 +86,9 @@ The scene as an embed for any site (Webflow, WordPress, Framer, plain HTML): a c
 - Options are data attributes, read by `embedOptions` (`src/embed/options.ts`, unit-tested): `data-light` (`cycle`, the default, or `dawn`, `midday`, `dusk`), five colours (`data-sky`, `data-horizon`, `data-ground`, `data-sand`, `data-shade`, as `#rgb` or `#rrggbb`; any colour holds the light, dusk unless `data-light` names another), `data-density` (`high`, `medium`, `low`, `minimal`: the best tier the scene may start at, via `startingTier` in `quality.ts`), and `data-quality` (like the home page's `?quality`, for tests and recordings). Anything it cannot use is named in a `console.warn` and left out; the scene starts anyway.
 - Gusts are measured within the canvas's own box (`pointInBox` in `wind.ts`), so a scene in one section of a page answers to the pointer over it, and leaving the box ends the stroke. On the home page the box is the whole window, as before.
 - A container taken out of the page releases its scene (`stop()`: listeners, observers, GPU memory). Several containers on a page each get their own scene (each its own WebGL context; browsers allow about sixteen).
-- Built by `vite.embed.config.ts` (`root: embed`, `base: "./"`) into `dist/embed/`: `sahra.js` keeps its name (other sites link to it), every other file has a hash in its name, and every path between them is relative, resolved against the script's own URL, never the embedding page. No modulepreload helper. `embed/index.html` is the demo page at `/embed/`: plain HTML with its own small stylesheet and none of the site's, two boxes (as it comes; held dawn light, moonlit colours, low density, with text inside) and the code to copy.
-- Module scripts load across origins only with CORS headers: Vite's preview server allows `localhost` origins by default (which the tests use); Vercel needs its own (see `vercel.json`).
+- Built by `vite.embed.config.ts` (`root: embed`, `base: "./"`) into `dist/embed/`: `sahra.js` keeps its name (other sites link to it), every other file has a hash in its name, and every path between them is relative, resolved against the script's own URL, never the embedding page. No modulepreload helper. An app build drops what an entry exports, so `preserveEntrySignatures: "exports-only"` keeps `sahra.js`'s `mount` export (a test imports it). `embed/index.html` is the demo page at `/embed/`: plain HTML with its own small stylesheet and none of the site's, two boxes (as it comes; held dawn light, moonlit colours, low density, with text inside) and the code to copy.
+- Module scripts load across origins only with CORS headers: Vite's preview server allows `localhost` origins by default (which the tests use); on Vercel, `vercel.json` sends `Access-Control-Allow-Origin: *` for everything under `/embed/`.
+- `docs/embedding.md` is the guide for site owners: the two lines, sizing and background, content on top, every option, step by step for Webflow and WordPress, any other site (single-page apps, `mount` for shadow roots), what visitors get, `data-state`, troubleshooting and hosting it yourself. Every HTML and CSS example in it was run on a page from another origin. Keep it in step with `src/embed/options.ts`.
 
 ## How the scene loads
 
@@ -172,7 +173,7 @@ GLSL lives in `src/scene/shaders/*.glsl`, imported as strings with Vite's `?raw`
 
 - Vercel project `sahra` in the personal team `mostafa-saafan-s-projects`, connected to the GitHub repo. Production: https://sahra-khaki.vercel.app (`sahra.vercel.app` belongs to someone else). Every push to `main` deploys production; every other branch and pull request gets its own preview deployment. Previews sit behind Vercel's login by default (Standard Protection), so only team members can open them.
 - Vercel reads the Node version from `engines.node` and the pnpm version from `packageManager`, and installs from the frozen lockfile; the build is `vite build` into `dist/` (detected, no settings needed).
-- `vercel.json` only sets caching: files in `/assets/` have content hashes in their names, so they are cached for a year (`immutable`); HTML keeps Vercel's default (always revalidated), so a new deploy is seen immediately.
+- `vercel.json` sets caching and the embed's CORS header: files in `/assets/` and `/embed/assets/` have content hashes in their names, so they are cached for a year (`immutable`); `/embed/sahra.js` keeps its name, so browsers keep it for an hour and may use it a day longer while they check for a new one (`stale-while-revalidate`); HTML keeps Vercel's default (always revalidated), so a new deploy is seen immediately. Everything under `/embed/` sends `Access-Control-Allow-Origin: *`, without which other sites cannot load the module script. Vite's preview server ignores `vercel.json`: check headers on a deployment.
 - `vercel link` writes a `.env.local` with a short-lived OIDC token and appends duplicate lines to `.gitignore`. The site needs no environment variables: delete the file and revert the `.gitignore` change.
 
 ## Dependencies
@@ -251,7 +252,10 @@ scripts/
   workflows/ci.yml   checks, end-to-end and Lighthouse jobs
   actions/setup/     shared pnpm + Node + install steps
 lighthouserc.json    Lighthouse CI: runs, Chrome flags, score budgets
-vercel.json          Vercel: long caching for /assets/
+vercel.json          Vercel: caching for /assets/ and /embed/, CORS for /embed/
+docs/
+  performance.md     real-device frame rates, Lighthouse, what the scene costs
+  embedding.md       how site owners embed the scene (Webflow, WordPress, any site)
 vite.config.ts       Tailwind, the %SITE_NAME% and %LAB_PATTERN% plugins, the two pages, ports
 vite.embed.config.ts the embed and its demo page, into dist/embed/ (relative paths, fixed sahra.js)
 embed/index.html     the embed's demo page (plain HTML, at /embed/)
@@ -263,4 +267,4 @@ tsconfig.node.json   config files, e2e/ and scripts/ (Node types, plus DOM for c
 
 ## Status
 
-Phases 0 to 5 done and live (scene, light, poster, adaptive quality, text layer, the Lab; measurements in `docs/performance.md`; the Calendly booking was dropped, the action is "Hire on Upwork"). Phase 6 (the embed) in progress on `feature/sahra-embed`: the embed, its options and its demo page are done; next, `docs/embedding.md` (Webflow, WordPress) and Vercel's CORS headers. Phases: 0 setup, 1 scene prototype, 2 art direction, 3 performance and adaptivity, 4 content layer and booking, 5 Lab, 6 embeddable package, 7 docs and portfolio packaging.
+Phases 0 to 5 done and live (scene, light, poster, adaptive quality, text layer, the Lab; measurements in `docs/performance.md`; the Calendly booking was dropped, the action is "Hire on Upwork"). Phase 6 (the embed) on `feature/sahra-embed` (draft PR #5): the embed, its options, its demo page, `docs/embedding.md` and Vercel's headers are done; after merging, check the CORS header and a cross-origin embed on production. Phases: 0 setup, 1 scene prototype, 2 art direction, 3 performance and adaptivity, 4 content layer and booking, 5 Lab, 6 embeddable package, 7 docs and portfolio packaging.
