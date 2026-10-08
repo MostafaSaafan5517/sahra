@@ -59,10 +59,41 @@ async function sweepAcrossTheSand(page: Page, isMobile: boolean): Promise<void> 
   await devtools.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
 }
 
-test("shows the content with the site name", async ({ page }) => {
+test("shows the studio's name, its line, its links and the portfolio label", async ({ page }) => {
   await page.goto("/");
-  await expect(page).toHaveTitle(SITE_NAME);
+  await expect(page).toHaveTitle(new RegExp(`^${SITE_NAME}: `));
   await expect(page.getByRole("heading", { level: 1, name: SITE_NAME })).toBeVisible();
+  await expect(page.getByText("Interactive websites and living, generative scenes")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Source on GitHub" })).toHaveAttribute(
+    "href",
+    "https://github.com/MostafaSaafan5517/sahra",
+  );
+  await expect(page.getByRole("link", { name: "Upwork profile" })).toHaveAttribute(
+    "href",
+    "https://www.upwork.com/freelancers/~0104fa36ecdc4bf8a1",
+  );
+  await expect(page.getByRole("contentinfo")).toContainText("fictional studio");
+  await expect(page.getByRole("contentinfo")).toContainText("portfolio project by Mostafa Saafan");
+});
+
+test("moves nothing while it loads: no layout shift", async ({ page }) => {
+  await page.goto(STEADY_SCENE);
+  await expect(page.locator("[data-scene]")).toHaveAttribute("data-state", "running");
+  const shift = await page.evaluate(
+    () =>
+      new Promise<number>((resolve) => {
+        let total = 0;
+        new PerformanceObserver((list) => {
+          for (const entry of list.getEntries() as (PerformanceEntry & { value: number })[]) {
+            total += entry.value;
+          }
+        }).observe({ type: "layout-shift", buffered: true });
+        setTimeout(() => {
+          resolve(total);
+        }, 500);
+      }),
+  );
+  expect(shift).toBe(0);
 });
 
 test("shows the poster at once, picked for the screen's shape", async ({ page, isMobile }) => {

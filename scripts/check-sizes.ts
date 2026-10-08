@@ -22,6 +22,7 @@ const BUDGETS: Budget[] = [
   { name: "page script", file: /^index-[\w-]+\.js$/, maxKb: 5, gzip: true },
   { name: "styles", file: /^index-[\w-]+\.css$/, maxKb: 15, gzip: true },
   { name: "scene (Three.js and shaders)", file: /^scene-[\w-]+\.js$/, maxKb: 145, gzip: true },
+  { name: "font", file: /^instrument-sans-latin-wght-[\w-]+\.woff2$/, maxKb: 35, gzip: false },
   { name: "phone poster", file: /^poster-portrait-860-[\w-]+\.webp$/, maxKb: 100, gzip: false },
   { name: "laptop poster", file: /^poster-landscape-1440-[\w-]+\.webp$/, maxKb: 80, gzip: false },
 ];

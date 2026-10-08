@@ -3,18 +3,24 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>%SITE_NAME%</title>
+    <title>%SITE_NAME%: interactive websites with living scenes</title>
     <meta
       name="description"
-      content="%SITE_NAME% is a generative desert scene of wind moving over sand, built with WebGL. A creative front-end portfolio project by Mostafa Saafan."
+      content="%SITE_NAME% is a fictional studio for interactive websites, shown through a living WebGL desert that stays fast on every phone. A portfolio project by Mostafa Saafan."
     />
     <meta name="color-scheme" content="dark" />
     <meta name="theme-color" content="#0a0a0a" />
-    <!-- No icon request until the brand mark lands in Phase 4. -->
-    <link rel="icon" href="data:," />
+    <link rel="icon" href="/src/favicon.svg" type="image/svg+xml" />
+    <link
+      rel="preload"
+      href="/src/fonts/instrument-sans-latin-wght.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
     <script type="module" src="/src/main.ts"></script>
   </head>
-  <body class="bg-neutral-950 text-neutral-100 antialiased">
+  <body class="flex min-h-dvh flex-col bg-neutral-950 font-sans text-neutral-100 antialiased">
     <!--
       Decorative. The poster is the scene's first frame (pnpm poster), shown at once; the live
       scene's canvas is added on top after the page has loaded and fades in over it.
@@ -44,9 +50,41 @@
         />
       </picture>
     </div>
-    <main class="relative mx-auto flex min-h-dvh max-w-3xl flex-col justify-center gap-4 px-6">
-      <h1 class="text-5xl font-semibold tracking-tight">%SITE_NAME%</h1>
-      <p class="text-lg text-neutral-300">A generative desert scene is on its way.</p>
+    <!-- The text sits in the sky, above the dunes; the footer sits on a dark wash over the sand. -->
+    <main class="relative flex-1">
+      <section
+        aria-labelledby="studio-name"
+        class="text-scrim relative isolate max-w-xl px-6 pt-14 sm:px-10 md:pt-20 lg:px-16"
+      >
+        <h1
+          id="studio-name"
+          class="text-6xl font-semibold tracking-tight text-neutral-50 md:text-7xl"
+        >
+          %SITE_NAME%
+        </h1>
+        <p
+          class="mt-4 max-w-[30ch] text-lg leading-relaxed text-pretty text-neutral-200 md:text-xl"
+        >
+          Interactive websites and living, generative scenes, built to stay fast on every phone.
+        </p>
+        <nav aria-label="Elsewhere" class="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
+          <a
+            href="https://github.com/MostafaSaafan5517/sahra"
+            class="rounded-sm text-neutral-100 underline decoration-neutral-500 underline-offset-4 transition-colors hover:text-accent hover:decoration-accent focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
+            >Source on GitHub</a
+          >
+          <a
+            href="https://www.upwork.com/freelancers/~0104fa36ecdc4bf8a1"
+            class="rounded-sm text-neutral-100 underline decoration-neutral-500 underline-offset-4 transition-colors hover:text-accent hover:decoration-accent focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
+            >Upwork profile</a
+          >
+        </nav>
+      </section>
     </main>
+    <footer
+      class="relative bg-linear-to-t from-neutral-950/90 via-neutral-950/60 to-transparent px-6 pt-20 pb-6 text-sm text-neutral-300 sm:px-10 lg:px-16"
+    >
+      <p>%SITE_NAME% is a fictional studio, made as a portfolio project by Mostafa Saafan.</p>
+    </footer>
   </body>
 </html>

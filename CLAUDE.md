@@ -34,8 +34,15 @@ The project name lives only in `src/config.ts` (`SITE_NAME`). HTML pages use the
 - No `console.log`; `console.warn`/`console.error` only for real failures. No commented-out code, no unused code, no empty `catch` blocks, no abstractions for single-use code.
 - Never listen to `window` scroll events. Use GSAP ScrollTrigger, IntersectionObserver or CSS scroll-driven animations.
 - Design follows the `design-taste-frontend` skill for the content layer and the Lab: one theme for the whole site (dark), one accent color, one corner-radius system, icons from a library. Hand-drawn SVG is allowed only where the brief asks for it (the Lab's geometric drawing).
-- Fonts: open-license (OFL) only, because the repo is public and the font files ship in it. Self-hosted with `@font-face`, `font-display: swap` and a metric-matched fallback so the swap causes no layout shift.
+- Fonts: open-license (OFL) only, because the repo is public and the font files ship in it. Self-hosted in `src/fonts/` with its licence, preloaded, `font-display: optional` (a late font is skipped for that visit instead of swapped in, so text never moves) and metric-matched fallback faces (`Instrument Sans Arial`, `Instrument Sans Roboto`), each under its own family name.
 - Config files (`vite.config.ts` and friends) import local TypeScript with an explicit `.ts` extension, which Vite's upcoming native config loader requires.
+
+## The text layer
+
+- One composition over the scene: the studio's name (`h1`), one line, the links (GitHub source, Upwork profile) and, once the Calendly link exists, "Book a call". A footer says plainly that the studio is fictional and the site a portfolio project. Copy: no em or en dashes, no invented clients, numbers or praise.
+- The text sits in the sky, above the dunes, on every screen shape; `.text-scrim` (`src/style.css`) is a soft dark wash behind it for wide windows where far dunes reach up, and the footer sits on a dark gradient over the near sand. Both work on the poster too.
+- Design (per the `design-taste-frontend` skill): Instrument Sans; one accent, the dusk amber `--color-accent` (#efa463, also the icon's sun), used for hover and focus; text in neutrals; left-aligned, airy, dark only (the scene and poster are a dark desert). The icon (`src/favicon.svg`) is a single geometric mark: the sun half set behind the horizon.
+- Readability is measured, not assumed: `e2e/readability.spec.ts` sets six points of the light cycle at the densest tier, makes the text transparent, measures the background behind every text element from screenshots (95th-percentile pixel: the scene, haze and wash together) and checks WCAG AA against each text's colour. Lowest measured: footer 9.2:1, the line 14.7:1, links 14:1, name 18.4:1. Computed colours can come back as `oklch()`: the test converts them by painting a pixel.
 
 ## How the scene loads
 
@@ -145,11 +152,13 @@ Playwright reuses a server already running on port 3301 outside CI, so stop any 
 ## Folder structure
 
 ```
-index.html           home page (content in HTML first, scripts after)
+index.html           home page: text layer, poster, font preload, icon (content first, scripts after)
 src/
   config.ts          SITE_NAME, the single place for the project name
   main.ts            entry for the home page: waits for idle, checks WebGL2, lazy-loads the scene
-  style.css          Tailwind and global styles
+  style.css          Tailwind, the font faces, theme tokens (font, accent), the text scrim
+  fonts/             Instrument Sans (Latin, variable weight) and its OFL licence
+  favicon.svg        the icon
   poster/            the poster, landscape and portrait WebP at several widths (pnpm poster)
   scene/
     scene.ts         renderer, dunes, sky, uniforms, render loop, tiers, pausing, stop(), ?tune wiring
@@ -185,4 +194,4 @@ tsconfig.node.json   config files, e2e/ and scripts/ (Node types, plus DOM for c
 
 ## Status
 
-Phase 0 (setup) done: scaffold, lazy-loaded Three.js scene, tests, CI with Lighthouse, Vercel with previews. Phases 1 (scene prototype), 2 (art direction, poster) and 3 (performance and adaptivity; measurements in `docs/performance.md`) built on `feature/sahra-dune-scene` (PR #2); the Lighthouse gate passes on CI (median Performance 92). Production keeps the Phase 0 placeholder until PR #2 is merged. Phases: 0 setup, 1 scene prototype, 2 art direction, 3 performance and adaptivity, 4 content layer and booking, 5 Lab, 6 embeddable package, 7 docs and portfolio packaging. The favicon is deliberately empty (`data:,`) until the brand mark lands in Phase 4.
+Phases 0 to 3 done and live (scene, light, poster, adaptive quality; measurements in `docs/performance.md`). Phase 4 (text layer and booking) in progress on `feature/sahra-content-layer`; "Book a call" waits for Mostafa's Calendly link. Phases: 0 setup, 1 scene prototype, 2 art direction, 3 performance and adaptivity, 4 content layer and booking, 5 Lab, 6 embeddable package, 7 docs and portfolio packaging.

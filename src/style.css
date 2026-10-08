@@ -1,5 +1,73 @@
 @import "tailwindcss";
 
+/*
+ * Instrument Sans (SIL Open Font License: src/fonts/OFL.txt), Latin only, variable weight 400 to
+ * 700, preloaded by index.html. `optional`: if the font is not ready for the first paint, this
+ * visit keeps the matched fallback below, so the text can never move when a late font arrives.
+ */
+@font-face {
+  font-family: "Instrument Sans";
+  src: url("./fonts/instrument-sans-latin-wght.woff2") format("woff2");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: optional;
+}
+
+/*
+ * Fallback faces scaled to Instrument Sans's metrics, so the swap to the real font moves nothing.
+ * Arial covers Windows, macOS and iOS; Roboto covers Android. Each has its own name: faces sharing
+ * one family name would leave only the last one usable. Values from the font file's metrics
+ * (unitsPerEm 1000, ascent 970, descent -250, average width 458) against each fallback's, the
+ * same calculation as the fontaine and capsize tools; recompute them if the font changes.
+ */
+@font-face {
+  font-family: "Instrument Sans Arial";
+  src: local("Arial");
+  size-adjust: 102.7365%;
+  ascent-override: 94.4163%;
+  descent-override: 24.3341%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Instrument Sans Roboto";
+  src: local("Roboto");
+  size-adjust: 102.962%;
+  ascent-override: 94.2095%;
+  descent-override: 24.2808%;
+  line-gap-override: 0%;
+}
+
+@theme {
+  --font-sans:
+    "Instrument Sans", "Instrument Sans Arial", "Instrument Sans Roboto", ui-sans-serif, system-ui,
+    sans-serif;
+  /* The page's one accent: the dusk light on the sand (DUSK.sandLit in src/scene/lighting.ts). */
+  --color-accent: #efa463;
+  /* Text on the accent. */
+  --color-ink: #0b0908;
+}
+
 :root {
   color-scheme: dark;
+  /* How dark the wash behind the hero text is (0 to 1). src/scene/lighting.test.ts reads it. */
+  --text-scrim-opacity: 0.7;
+}
+
+@layer components {
+  /*
+   * A soft dark wash behind the hero text. The text sits in the sky, above the dunes; where far
+   * dunes reach up behind it (wide windows, bright midday light), the wash keeps it readable.
+   */
+  .text-scrim::before {
+    content: "";
+    position: absolute;
+    inset: -4rem -6rem;
+    z-index: -1;
+    pointer-events: none;
+    background: radial-gradient(
+      closest-side,
+      rgb(10 10 10 / var(--text-scrim-opacity)) 60%,
+      rgb(10 10 10 / 0)
+    );
+  }
 }
