@@ -115,3 +115,13 @@
     stroke: var(--color-accent);
   }
 }
+
+/*
+ * The scroll story, once src/lab/story.ts has started it: the page's scroll moves the day's row
+ * (GSAP translates it), so the row is as wide as its pictures and no longer scrolls or snaps.
+ */
+[data-story][data-enhanced] [data-story-track] {
+  width: max-content;
+  overflow: visible;
+  scroll-snap-type: none;
+}

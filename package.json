@@ -16,7 +16,8 @@
     "test:e2e": "playwright test",
     "lighthouse": "lhci collect && node scripts/check-lighthouse-path.ts && lhci assert && lhci upload",
     "size": "node scripts/check-sizes.ts",
-    "poster": "node scripts/capture-poster.ts"
+    "poster": "node scripts/capture-poster.ts",
+    "stills": "node scripts/capture-stills.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
@@ -42,6 +43,7 @@
   },
   "packageManager": "pnpm@11.13.1",
   "dependencies": {
+    "gsap": "^3.15.0",
     "lil-gui": "^0.21.0",
     "three": "^0.186.1"
   }

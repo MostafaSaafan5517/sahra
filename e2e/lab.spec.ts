@@ -30,6 +30,47 @@ async function untilDrawn(page: Page): Promise<void> {
     .toBe(0);
 }
 
+const STORY_CHUNK = /\/assets\/story-[\w-]+\.js$/;
+
+/**
+ * Waits until GSAP has turned the story into the scroll story and laid out both pins, then says
+ * where each pinned part starts on the page and how far the page scrolls while it is pinned.
+ */
+async function storyPins(page: Page) {
+  await page.locator("[data-story][data-enhanced]").waitFor();
+  await page.waitForFunction(
+    () =>
+      [...document.querySelectorAll(".pin-spacer")].filter(
+        (spacer) => parseFloat(getComputedStyle(spacer).paddingBottom) > 0,
+      ).length === 2,
+  );
+  const [reveal, pan] = await page.evaluate(() =>
+    [...document.querySelectorAll<HTMLElement>(".pin-spacer")].map((spacer) => ({
+      top: spacer.getBoundingClientRect().top + scrollY,
+      length: parseFloat(getComputedStyle(spacer).paddingBottom),
+    })),
+  );
+  if (!reveal || !pan) throw new Error("The story has no pins.");
+  return { reveal, pan };
+}
+
+async function scrollToY(page: Page, y: number): Promise<void> {
+  await page.evaluate((top) => {
+    scrollTo(0, top);
+  }, y);
+}
+
+const opacities = (page: Page, selector: string) =>
+  page
+    .locator(selector)
+    .evaluateAll((nodes) => nodes.map((node) => Number(getComputedStyle(node).opacity)));
+
+/** How far the day's row has slid left, in pixels. */
+const rowShift = (page: Page) =>
+  page
+    .locator("[data-story-track]")
+    .evaluate((track) => -new DOMMatrix(getComputedStyle(track).transform).m41);
+
 test("shows the Lab: its title, the line drawing, the way home and the portfolio label", async ({
   page,
 }) => {
@@ -66,6 +107,7 @@ test("is one click from the home page", async ({ page }) => {
 test("has no accessibility violations", async ({ page }) => {
   await page.goto(LAB);
   await untilDrawn(page);
+  await storyPins(page);
   const { violations } = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"])
     .analyze();
@@ -105,6 +147,8 @@ test("moves nothing while it loads, even when its script comes late: no layout s
     await route.continue();
   });
   await page.goto(LAB);
+  // Including the moment GSAP pins the story's parts: the pins add room below them, off screen.
+  await storyPins(page);
   const shift = await page.evaluate(
     () =>
       new Promise<number>((resolve) => {
@@ -123,10 +167,18 @@ test("moves nothing while it loads, even when its script comes late: no layout s
 });
 
 test("lays out the same before and after its script runs", async ({ page }) => {
-  // Where the page's parts sit (top and height), from the top of the page.
+  // Where the page's parts sit (top and height), from the top of the page, down to the story's
+  // first pinned part: the pins add room below themselves by design.
   const layout = () =>
     page.evaluate(() =>
-      ["h1", "#drawing-title", ".drawing", ".drawing + div", "footer"].map((selector) => {
+      [
+        "h1",
+        "#drawing-title",
+        ".drawing",
+        ".drawing + div",
+        "#story-title",
+        "[data-story-reveal]",
+      ].map((selector) => {
         const box = document.querySelector(selector)?.getBoundingClientRect();
         return {
           selector,
@@ -143,9 +195,9 @@ test("lays out the same before and after its script runs", async ({ page }) => {
   const before = await layout();
   await page.unrouteAll();
 
-  // Once the script has run and shown "Draw it again".
+  // Once the script has run, the story's GSAP included.
   await page.goto(LAB);
-  await expect(page.getByRole("button", { name: "Draw it again" })).toBeVisible();
+  await storyPins(page);
   expect(await layout()).toEqual(before);
 });
 
@@ -197,8 +249,130 @@ test("draws it again on request", async ({ page }) => {
   await untilDrawn(page);
 });
 
+test("loads the scroll story's GSAP only once the page has loaded", async ({ page }) => {
+  await page.goto(LAB);
+  await storyPins(page);
+  const timing = await page.evaluate((chunk) => {
+    const [navigation] = performance.getEntriesByType(
+      "navigation",
+    ) as PerformanceNavigationTiming[];
+    const story = performance
+      .getEntriesByType("resource")
+      .find((entry) => new RegExp(chunk).test(entry.name));
+    return { loadEventEnd: navigation?.loadEventEnd, storyRequestedAt: story?.startTime };
+  }, STORY_CHUNK.source);
+  expect(timing.loadEventEnd).toBeDefined();
+  expect(timing.storyRequestedAt).toBeGreaterThan(timing.loadEventEnd ?? Infinity);
+});
+
+test("pins the lines and brings them up one by one as the page scrolls", async ({ page }) => {
+  await page.goto(LAB);
+  const { reveal } = await storyPins(page);
+  const lines = "[data-story-line]";
+  const note = "[data-story-note]";
+
+  await scrollToY(page, reveal.top);
+  await expect.poll(() => opacities(page, lines)).toEqual([1, 0, 0]);
+  expect(await opacities(page, note)).toEqual([0]);
+
+  // Each turn takes a third of the pinned scroll; opacities rounded to tenths.
+  const linesNow = async () =>
+    (await opacities(page, lines)).map((opacity) => Math.round(opacity * 10) / 10);
+
+  // A third of the way: still pinned to the top of the window; the second line is up, the first
+  // has stepped back and the third still waits.
+  await scrollToY(page, reveal.top + reveal.length / 3);
+  await expect
+    .poll(async () => (await page.locator("[data-story-reveal]").boundingBox())?.y)
+    .toBeCloseTo(0, 0);
+  await expect.poll(linesNow).toEqual([0.4, 1, 0]);
+
+  // Two thirds: the third line is up.
+  await scrollToY(page, reveal.top + (2 * reveal.length) / 3);
+  await expect.poll(linesNow).toEqual([0.4, 0.4, 1]);
+
+  // The end: the note has come up too.
+  await scrollToY(page, reveal.top + reveal.length);
+  await expect.poll(async () => (await opacities(page, note))[0]).toBe(1);
+});
+
+test("pans the day's pictures sideways as the page scrolls, to the last panel", async ({
+  page,
+}) => {
+  await page.goto(LAB);
+  const { pan } = await storyPins(page);
+  const width = page.viewportSize()?.width ?? 0;
+
+  await scrollToY(page, pan.top);
+  await expect.poll(() => rowShift(page)).toBeCloseTo(0, 0);
+
+  await scrollToY(page, pan.top + pan.length);
+  await expect
+    .poll(async () => (await page.locator("[data-story-pan]").boundingBox())?.y)
+    .toBeCloseTo(0, 0);
+  await expect.poll(() => rowShift(page)).toBeCloseTo(pan.length, 0);
+  const end = await page.getByRole("link", { name: "See it move" }).boundingBox();
+  expect(end?.x).toBeGreaterThan(0);
+  expect((end?.x ?? Infinity) + (end?.width ?? 0)).toBeLessThan(width);
+  await expect
+    .poll(() =>
+      page
+        .getByRole("img", { name: /^The dune scene at dusk/ })
+        .evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0),
+    )
+    .toBe(true);
+});
+
+test("brings the last panel into view when its link gets keyboard focus", async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, "Keyboard focus is a desktop concern; phones have no Tab key.");
+  await page.goto(LAB);
+  await storyPins(page);
+  const link = page.getByRole("link", { name: "See it move" });
+  await link.focus();
+  await expect
+    .poll(async () => {
+      const box = await link.boundingBox();
+      const viewport = page.viewportSize();
+      return (
+        !!box &&
+        !!viewport &&
+        box.x >= 0 &&
+        box.y >= 0 &&
+        box.x + box.width <= viewport.width &&
+        box.y + box.height <= viewport.height
+      );
+    })
+    .toBe(true);
+});
+
 test.describe("with reduced motion", () => {
   test.use({ reducedMotion: "reduce" });
+
+  test("keeps the story a plain page: every line shown, the pictures in a row to scroll, no GSAP", async ({
+    page,
+  }) => {
+    const storyRequests: string[] = [];
+    page.on("request", (request) => {
+      if (STORY_CHUNK.test(request.url())) storyRequests.push(request.url());
+    });
+    await page.goto(LAB);
+    await page.waitForLoadState("load");
+    await page.waitForTimeout(1500);
+    expect(storyRequests).toEqual([]);
+    await expect(page.locator("[data-story][data-enhanced]")).toHaveCount(0);
+    expect(await opacities(page, "[data-story-line], [data-story-note]")).toEqual([1, 1, 1, 1]);
+
+    const track = page.locator("[data-story-track]");
+    await expect(track).toHaveAttribute("tabindex", "0");
+    const scrolls = await track.evaluate((row) => row.scrollWidth > row.clientWidth);
+    expect(scrolls, "the row is wider than the window, and scrolls").toBe(true);
+    await track.focus();
+    await page.keyboard.press("ArrowRight");
+    await expect.poll(() => track.evaluate((row) => row.scrollLeft)).toBeGreaterThan(0);
+  });
 
   test("shows the finished drawing at once, with nothing moving and no replay", async ({
     page,

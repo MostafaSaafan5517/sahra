@@ -31,6 +31,18 @@ export default defineConfig({
         home: resolve(import.meta.dirname, "index.html"),
         lab: resolve(import.meta.dirname, "lab/index.html"),
       },
+      // What both pages load lands in one chunk under a plain name, `shared-*` (.js and .css):
+      // the styles, the idle helper and Vite's preload helper for loading chunks on demand.
+      output: {
+        codeSplitting: {
+          groups: [
+            {
+              name: "shared",
+              test: /vite\/preload-helper|\/src\/(style\.css|when-idle\.ts)$/,
+            },
+          ],
+        },
+      },
     },
     // Three.js's WebGLRenderer is about 520 kB minified (130 kB gzipped). It sits in its own
     // chunk that loads only after first paint; the warning stays on for anything bigger.

@@ -4,12 +4,15 @@
  * changes the first frame (settings, shaders, the light).
  *
  * It builds the site, serves it, and opens it with reduced motion, so the scene draws its first
- * frame and stops. With the text hidden, it screenshots the scene and has the browser re-encode it
- * as WebP at each width the page offers (`srcset` in index.html).
+ * frame and stops. `?quality=high` asks for the densest tier, and for the scene at all: headless
+ * Chromium has only software WebGL, where the page would otherwise show the poster itself. With
+ * the text hidden, it screenshots the scene and has the browser re-encode it as WebP at each
+ * width the page offers (`srcset` in index.html).
  */
-import { chromium, type Page } from "@playwright/test";
+import { chromium } from "@playwright/test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { build, preview } from "vite";
+import { encodeWebp } from "./encode-webp.ts";
 
 const OUT_DIR = "src/poster";
 const PORT = 3302;
@@ -29,34 +32,6 @@ const SHOTS = [
   { name: "portrait", viewport: { width: 430, height: 932 }, scale: 2, widths: [430, 860] },
 ];
 
-/** Re-encodes a PNG screenshot as WebP at the given width, using the browser's own encoder. */
-async function encodeWebp(page: Page, png: Buffer, width: number): Promise<Buffer> {
-  const base64 = await page.evaluate(
-    async ({ source, width, quality }) => {
-      const image = new Image();
-      image.src = `data:image/png;base64,${source}`;
-      await image.decode();
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = Math.round((image.height * width) / image.width);
-      const context = canvas.getContext("2d");
-      if (!context) throw new Error("No 2D canvas to encode with.");
-      context.imageSmoothingQuality = "high";
-      context.drawImage(image, 0, 0, canvas.width, canvas.height);
-      const blob = await new Promise<Blob | null>((resolve) => {
-        canvas.toBlob(resolve, "image/webp", quality);
-      });
-      if (!blob) throw new Error("The browser could not encode WebP.");
-      const bytes = new Uint8Array(await blob.arrayBuffer());
-      let binary = "";
-      for (const byte of bytes) binary += String.fromCharCode(byte);
-      return btoa(binary);
-    },
-    { source: png.toString("base64"), width, quality: QUALITY },
-  );
-  return Buffer.from(base64, "base64");
-}
-
 await build({ logLevel: "warn" });
 const server = await preview({ preview: { port: PORT, strictPort: true }, logLevel: "warn" });
 const browser = await chromium.launch();
@@ -68,13 +43,13 @@ try {
       deviceScaleFactor: shot.scale,
       reducedMotion: "reduce",
     });
-    await page.goto(`http://localhost:${String(PORT)}/`);
+    await page.goto(`http://localhost:${String(PORT)}/?quality=high`);
     await page.locator('[data-scene][data-state="running"]').waitFor();
-    await page.addStyleTag({ content: "main { visibility: hidden; }" });
+    await page.addStyleTag({ content: "main, footer { visibility: hidden; }" });
     const png = await page.locator("[data-scene] canvas").screenshot();
     for (const width of shot.widths) {
       const file = `${OUT_DIR}/poster-${shot.name}-${String(width)}.webp`;
-      const webp = await encodeWebp(page, png, width);
+      const webp = await encodeWebp(page, png, width, QUALITY);
       writeFileSync(file, webp);
       console.info(`${file}  ${String(Math.round(webp.length / 1024))} kB`);
     }

@@ -22,7 +22,8 @@ interface Budget {
 
 const BUDGETS: Budget[] = [
   { name: "home page script", file: /^home-[\w-]+\.js$/, maxKb: 5, gzip: true },
-  { name: "styles (both pages)", file: /^style-[\w-]+\.css$/, maxKb: 15, gzip: true },
+  { name: "styles (both pages)", file: /^shared-[\w-]+\.css$/, maxKb: 15, gzip: true },
+  { name: "shared script (both pages)", file: /^shared-[\w-]+\.js$/, maxKb: 2, gzip: true },
   { name: "scene (Three.js and shaders)", file: /^scene-[\w-]+\.js$/, maxKb: 145, gzip: true },
   { name: "font", file: /^instrument-sans-latin-wght-[\w-]+\.woff2$/, maxKb: 35, gzip: false },
   { name: "phone poster", file: /^poster-portrait-860-[\w-]+\.webp$/, maxKb: 100, gzip: false },
@@ -36,6 +37,10 @@ const BUDGETS: Budget[] = [
   },
   { name: "Lab script", file: /^lab-[\w-]+\.js$/, maxKb: 2, gzip: true },
   { name: "Lab styles", file: /^lab-[\w-]+\.css$/, maxKb: 2, gzip: true },
+  { name: "Lab scroll story (GSAP)", file: /^story-[\w-]+\.js$/, maxKb: 50, gzip: true },
+  // Midday is the busiest picture of the day, so the largest file at each width.
+  { name: "Lab still, phone", file: /^midday-720-[\w-]+\.webp$/, maxKb: 60, gzip: false },
+  { name: "Lab still, laptop", file: /^midday-1440-[\w-]+\.webp$/, maxKb: 140, gzip: false },
 ];
 
 let failed = false;

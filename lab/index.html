@@ -6,7 +6,7 @@
     <title>%SITE_NAME% Lab: studies in line and motion</title>
     <meta
       name="description"
-      content="Studies from %SITE_NAME%, a fictional studio: an eight-point star pattern that draws itself in plain SVG and CSS. A portfolio project by Mostafa Saafan."
+      content="Studies from %SITE_NAME%, a fictional studio: an eight-point star pattern that draws itself in plain SVG and CSS, and a scroll story with pinned panels and a horizontal pan. A portfolio project by Mostafa Saafan."
     />
     <meta name="color-scheme" content="dark" />
     <meta name="theme-color" content="#0a0a0a" />
@@ -87,6 +87,161 @@
           >
             Draw it again
           </button>
+        </div>
+      </section>
+      <section aria-labelledby="story-title" data-story class="mt-28 md:mt-40">
+        <div class="max-w-[46ch]">
+          <h2
+            id="story-title"
+            class="text-3xl font-semibold tracking-tight text-neutral-50 md:text-4xl"
+          >
+            A story told by scrolling
+          </h2>
+          <p class="mt-5 leading-relaxed text-pretty text-neutral-300">
+            Pinned panels, staged reveals and a horizontal pan: the kind of scroll story restaurants
+            and brands ask for. This one follows the sand, and the scroll drives every motion in it.
+          </p>
+        </div>
+        <div data-story-reveal class="flex min-h-svh flex-col justify-center py-16">
+          <p class="text-sm font-medium tracking-wide text-neutral-400 uppercase">
+            How a dune moves
+          </p>
+          <ol
+            class="mt-6 space-y-4 text-3xl leading-tight font-semibold tracking-tight text-pretty text-neutral-50 sm:text-4xl md:text-5xl lg:text-6xl"
+          >
+            <li data-story-line class="max-w-[20ch]">Wind lifts a grain of sand.</li>
+            <li data-story-line class="max-w-[20ch]">
+              It hops, lands and knocks others into the air.
+            </li>
+            <li data-story-line class="max-w-[20ch]">
+              Grain by grain, the whole dune creeps downwind.
+            </li>
+          </ol>
+          <p
+            data-story-note
+            class="mt-10 max-w-[46ch] leading-relaxed text-pretty text-neutral-300"
+          >
+            Most windblown sand travels in short, low hops. Geologists call it saltation.
+          </p>
+        </div>
+        <!-- Full width. The bleed sits on this wrapper: GSAP fixes a pinned element's margins. -->
+        <div class="-mx-6 sm:-mx-10 lg:-mx-16">
+          <div
+            data-story-pan
+            class="flex min-h-svh flex-col justify-center gap-8 overflow-x-clip py-16"
+          >
+            <p
+              id="day-title"
+              class="px-6 text-sm font-medium tracking-wide text-neutral-400 uppercase sm:px-10 lg:px-16"
+            >
+              One day on the dunes
+            </p>
+            <ol
+              data-story-track
+              tabindex="0"
+              aria-labelledby="day-title"
+              class="flex snap-x snap-mandatory scroll-px-6 gap-6 overflow-x-auto px-6 pb-4 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent sm:scroll-px-10 sm:px-10 lg:scroll-px-16 lg:gap-10 lg:px-16"
+            >
+              <li class="w-[80vw] shrink-0 snap-start sm:w-[60vw] lg:w-[46vw]">
+                <figure>
+                  <img
+                    src="/src/lab/stills/dawn-1080.webp"
+                    srcset="
+                      /src/lab/stills/dawn-720.webp   720w,
+                      /src/lab/stills/dawn-1080.webp 1080w,
+                      /src/lab/stills/dawn-1440.webp 1440w
+                    "
+                    sizes="(min-width: 64rem) 46vw, (min-width: 40rem) 60vw, 80vw"
+                    width="1440"
+                    height="1440"
+                    loading="lazy"
+                    decoding="async"
+                    alt="The dune scene at dawn: fine lines of pale grains under a dark mauve sky."
+                    class="aspect-4/5 w-full border border-neutral-800 object-cover sm:aspect-3/2"
+                  />
+                  <figcaption
+                    class="mt-4 max-w-[46ch] leading-relaxed text-pretty text-neutral-300"
+                  >
+                    <span class="block text-lg font-semibold text-neutral-50">Dawn</span>
+                    Low sun from the left: rose light on the slopes facing it, mauve shadows.
+                  </figcaption>
+                </figure>
+              </li>
+              <li class="w-[80vw] shrink-0 snap-start sm:w-[60vw] lg:w-[46vw]">
+                <figure>
+                  <img
+                    src="/src/lab/stills/midday-1080.webp"
+                    srcset="
+                      /src/lab/stills/midday-720.webp   720w,
+                      /src/lab/stills/midday-1080.webp 1080w,
+                      /src/lab/stills/midday-1440.webp 1440w
+                    "
+                    sizes="(min-width: 64rem) 46vw, (min-width: 40rem) 60vw, 80vw"
+                    width="1440"
+                    height="1440"
+                    loading="lazy"
+                    decoding="async"
+                    alt="The dune scene at midday: bright, even lines of grains under a dark sky."
+                    class="aspect-4/5 w-full border border-neutral-800 object-cover sm:aspect-3/2"
+                  />
+                  <figcaption
+                    class="mt-4 max-w-[46ch] leading-relaxed text-pretty text-neutral-300"
+                  >
+                    <span class="block text-lg font-semibold text-neutral-50">Midday</span>
+                    High sun: flat, bleached light and little contrast.
+                  </figcaption>
+                </figure>
+              </li>
+              <li class="w-[80vw] shrink-0 snap-start sm:w-[60vw] lg:w-[46vw]">
+                <figure>
+                  <img
+                    src="/src/lab/stills/dusk-1080.webp"
+                    srcset="
+                      /src/lab/stills/dusk-720.webp   720w,
+                      /src/lab/stills/dusk-1080.webp 1080w,
+                      /src/lab/stills/dusk-1440.webp 1440w
+                    "
+                    sizes="(min-width: 64rem) 46vw, (min-width: 40rem) 60vw, 80vw"
+                    width="1440"
+                    height="1440"
+                    loading="lazy"
+                    decoding="async"
+                    alt="The dune scene at dusk: an amber glow on the horizon to the right, above dim lines of grains."
+                    class="aspect-4/5 w-full border border-neutral-800 object-cover sm:aspect-3/2"
+                  />
+                  <figcaption
+                    class="mt-4 max-w-[46ch] leading-relaxed text-pretty text-neutral-300"
+                  >
+                    <span class="block text-lg font-semibold text-neutral-50">Dusk</span>
+                    Low sun from the right: amber light, plum shadows.
+                  </figcaption>
+                </figure>
+              </li>
+              <li
+                class="flex w-[70vw] shrink-0 snap-start flex-col justify-center sm:w-[40vw] lg:w-[28vw]"
+              >
+                <p
+                  class="text-2xl leading-snug font-semibold tracking-tight text-pretty text-neutral-50"
+                >
+                  Every picture here is the scene from the home page, stopped at one moment of its
+                  day.
+                </p>
+                <a
+                  href="/"
+                  data-story-end
+                  class="mt-6 self-start rounded-sm text-neutral-100 underline decoration-neutral-500 underline-offset-4 transition-colors hover:text-accent hover:decoration-accent focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
+                  >See it move</a
+                >
+              </li>
+            </ol>
+            <div
+              data-story-progress
+              class="invisible mx-6 h-px bg-neutral-800 sm:mx-10 lg:mx-16"
+              aria-hidden="true"
+            >
+              <div class="h-full origin-left scale-x-0 bg-accent"></div>
+            </div>
+          </div>
         </div>
       </section>
     </main>
