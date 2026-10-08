@@ -13,8 +13,8 @@ import {
 import { createCamera, FAR_DEPTH, FIELD_OF_VIEW, NEAR_DEPTH } from "./camera";
 import { createDuneGeometry, seededRandom } from "./dunes";
 import { FrameMonitor } from "./frame-monitor";
-import { lightAt, SUN_GLOW } from "./lighting";
-import { initialTier, QUALITY_TIERS, qualityTier, readDeviceSignals } from "./quality";
+import { type Light, lightAt, SUN_GLOW } from "./lighting";
+import { QUALITY_TIERS, qualityTier, readDeviceSignals, startingTier, tierNamed } from "./quality";
 import { SCENE_SETTINGS } from "./settings";
 import fragmentShader from "./shaders/dunes.frag.glsl?raw";
 import duneVertexShader from "./shaders/dunes.vert.glsl?raw";
@@ -31,7 +31,7 @@ const LIGHTEST_TIER = QUALITY_TIERS.length - 1;
  * Frame budgets for the 75th-percentile frame. Above 22 ms (below about 45 fps) the scene steps
  * down a tier. At the lightest tier it gives up for the poster only above 40 ms (below about
  * 25 fps): a steady 45 fps scene is still far better than none. (Software-only WebGL never gets
- * this far: main.ts shows the poster instead, unless `?quality` asks for the scene.)
+ * this far: mount.ts does not start the scene there, unless asked to with `force`.)
  */
 const STEP_DOWN_BUDGET_MS = 22;
 const GIVE_UP_BUDGET_MS = 40;
@@ -43,10 +43,24 @@ const GIVE_UP_BUDGET_MS = 40;
  */
 export type SceneState = "running" | "lost" | "low-power";
 
-interface SceneOptions {
+export interface SceneOptions {
   /** False renders a single still frame, for visitors who prefer reduced motion. */
   animate: boolean;
   onStateChange: (state: SceneState) => void;
+  /**
+   * A tier's name locks the quality there: no stepping down, no giving up (for screen recordings,
+   * comparing tiers by eye, and tests that need the scene to keep running). Anything else, or
+   * nothing, lets the quality adapt to the frame rate.
+   */
+  lockedTier?: string | undefined;
+  /** The best tier an adaptive scene may start at (an embed's `data-density`). */
+  highestTier?: string | undefined;
+  /** A fixed light. Without one, the light moves through the day from `startPhase`. */
+  light?: Light | undefined;
+  /** Opens the frame-rate overlay (the home page's `?debug`). */
+  debug?: boolean;
+  /** Opens the tuning panel (the home page's `?tune`). */
+  tune?: boolean;
 }
 
 /**
@@ -72,7 +86,7 @@ export interface SceneHandle {
 export async function startScene(
   canvas: HTMLCanvasElement,
   context: WebGL2RenderingContext,
-  { animate, onStateChange }: SceneOptions,
+  { animate, onStateChange, lockedTier, highestTier, light: fixedLight, debug, tune }: SceneOptions,
 ): Promise<SceneHandle> {
   const renderer = new WebGLRenderer({ canvas, context });
   renderer.setClearColor(BACKGROUND);
@@ -80,16 +94,12 @@ export async function startScene(
 
   const camera = createCamera(1);
   const gusts = new GustField();
-  const light = lightAt(SCENE_SETTINGS.startPhase);
-  const flags = new URLSearchParams(location.search);
+  // The light the shaders get; with no fixed light, render() moves it through the day.
+  const light = fixedLight ? structuredClone(fixedLight) : lightAt(SCENE_SETTINGS.startPhase);
   const signals = readDeviceSignals(context);
-  // ?quality=high|medium|low|minimal locks the tier: no stepping down, no giving up. For screen
-  // recordings, comparing tiers by eye, and tests that need the scene to keep running.
-  // ?quality=auto (or any other value) keeps the automatic tiers. Either way, main.ts runs the
-  // scene even on software-only WebGL, where the page otherwise shows the poster.
-  const lockedTier = QUALITY_TIERS.findIndex((tier) => tier.name === flags.get("quality"));
-  const adaptive = lockedTier === -1;
-  let tierIndex = adaptive ? initialTier(signals) : lockedTier;
+  const locked = tierNamed(lockedTier);
+  const adaptive = locked === -1;
+  let tierIndex = adaptive ? startingTier(signals, highestTier) : locked;
 
   // The scene's clock, in seconds: starts at `startTime` with the first frame and stands still
   // while the scene is paused. Animation frames and pointer events both read it.
@@ -195,7 +205,7 @@ export async function startScene(
   function render(timeMs: number): void {
     const seconds = sceneSeconds(timeMs);
     time.value = seconds;
-    lightAt(phaseAt(seconds), light);
+    if (!fixedLight) lightAt(phaseAt(seconds), light);
     duneUniforms.uSandLit.value.fromArray(light.sandLit);
     duneUniforms.uSandShade.value.fromArray(light.sandShade);
     duneUniforms.uSun.value.fromArray(light.sun);
@@ -299,9 +309,9 @@ export async function startScene(
 
   // A slot is reused only after its gust has settled, so the sand never snaps back early.
   const trail = new GustTrail(camera, gusts, SCENE_SETTINGS.gustLife / MAX_GUSTS);
-  removeListeners.push(listenForGusts(trail, () => sceneSeconds(performance.now())));
+  removeListeners.push(listenForGusts(trail, () => sceneSeconds(performance.now()), canvas));
 
-  if (flags.has("debug")) {
+  if (debug) {
     import("./debug").then(
       ({ openDebugOverlay }) => {
         openDebugOverlay(() => {
@@ -323,7 +333,7 @@ export async function startScene(
       },
     );
   }
-  if (flags.has("tune")) {
+  if (tune) {
     openTuning({
       duneUniforms,
       trail,

@@ -125,20 +125,49 @@ export class GustTrail {
   }
 }
 
+/** A box on screen, in CSS pixels (a `DOMRect`). */
+interface Box {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
 /**
- * Feeds mouse and finger movement anywhere on the page into the trail. Fingers use touch events
- * rather than pointer events: touch events keep arriving while the browser scrolls or zooms, and
- * passive listeners never block either, so the page's own touch behaviour is untouched.
- * Returns a function that removes the listeners.
+ * Where a pointer at (clientX, clientY) is within the box, in CSS pixels from its top left
+ * corner, or null when it is outside.
  */
-export function listenForGusts(trail: GustTrail, seconds: () => number): () => void {
+export function pointInBox(
+  clientX: number,
+  clientY: number,
+  box: Box,
+): { x: number; y: number } | null {
+  const x = clientX - box.left;
+  const y = clientY - box.top;
+  return x >= 0 && y >= 0 && x <= box.width && y <= box.height ? { x, y } : null;
+}
+
+/**
+ * Feeds mouse and finger movement over `area` (the scene's canvas) into the trail. On the home
+ * page the canvas fills the window; an embedded scene may be any box on a page, so movement is
+ * measured within it, and leaving it ends the stroke. The listeners are on the window: fingers
+ * use touch events rather than pointer events, as touch events keep arriving while the browser
+ * scrolls or zooms, and passive listeners never block either, so the page's own touch behaviour
+ * is untouched. Returns a function that removes the listeners.
+ */
+export function listenForGusts(trail: GustTrail, seconds: () => number, area: Element): () => void {
+  const follow = (clientX: number, clientY: number) => {
+    const box = area.getBoundingClientRect();
+    const point = pointInBox(clientX, clientY, box);
+    if (point) trail.move(point.x, point.y, seconds(), box.width, box.height);
+    else trail.end();
+  };
   const followPointer = (event: PointerEvent) => {
-    if (event.pointerType === "touch") return;
-    trail.move(event.clientX, event.clientY, seconds(), innerWidth, innerHeight);
+    if (event.pointerType !== "touch") follow(event.clientX, event.clientY);
   };
   const followFinger = (event: TouchEvent) => {
     const touch = event.touches[0];
-    if (touch) trail.move(touch.clientX, touch.clientY, seconds(), innerWidth, innerHeight);
+    if (touch) follow(touch.clientX, touch.clientY);
   };
   const startStroke = (event: TouchEvent) => {
     trail.end();

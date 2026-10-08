@@ -5,7 +5,7 @@ import { SITE_NAME } from "./src/config.ts";
 import { patternSvg } from "./src/lab/pattern.ts";
 
 /** Writes the site name into every HTML page at build time, so it lives in one constant. */
-function siteName(): Plugin {
+export function siteName(): Plugin {
   return {
     name: "sahra:site-name",
     transformIndexHtml: (html) => html.replaceAll("%SITE_NAME%", SITE_NAME),

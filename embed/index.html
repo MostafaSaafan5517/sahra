@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>%SITE_NAME% embed: the dune scene on any page</title>
+    <meta
+      name="description"
+      content="The dune scene from %SITE_NAME%, a fictional studio, embedded in a plain HTML page with one script tag. A portfolio project by Mostafa Saafan."
+    />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0a0a0a" />
+    <link rel="icon" href="../src/favicon.svg" type="image/svg+xml" />
+    <!--
+      Plain HTML on purpose: no framework and none of the site's styles, like any page the scene
+      may be embedded in. The script is the same one other sites load.
+    -->
+    <script type="module" src="../src/embed/sahra.ts"></script>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: system-ui, sans-serif;
+        line-height: 1.6;
+        color: #d4d4d4;
+        background: #0a0a0a;
+      }
+      body {
+        margin: 0;
+      }
+      main,
+      footer {
+        max-width: 60rem;
+        margin: 0 auto;
+        padding: 0 1.5rem;
+      }
+      main {
+        padding-top: 4rem;
+        padding-bottom: 4rem;
+      }
+      h1 {
+        margin: 0;
+        font-size: clamp(2.25rem, 6vw, 3.5rem);
+        line-height: 1.1;
+        color: #fafafa;
+      }
+      h2 {
+        margin: 4rem 0 1rem;
+        font-size: 1.5rem;
+        color: #fafafa;
+      }
+      p {
+        max-width: 60ch;
+      }
+      a {
+        color: #fafafa;
+        text-underline-offset: 4px;
+      }
+      a:hover {
+        color: #efa463;
+      }
+      a:focus-visible {
+        outline: 2px solid #efa463;
+        outline-offset: 4px;
+        border-radius: 2px;
+      }
+      /* What shows until the scene fades in, and stays where it cannot run. */
+      .scene {
+        height: clamp(18rem, 50vw, 26rem);
+        border-radius: 1rem;
+        background: radial-gradient(120% 80% at 75% 25%, #2e170d, #0b0908 60%);
+      }
+      .scene.moonlight {
+        display: flex;
+        align-items: flex-start;
+        padding: 2rem;
+        box-sizing: border-box;
+        background: radial-gradient(120% 80% at 25% 25%, #1d2740, #070b14 60%);
+      }
+      .scene .overlay {
+        margin: 0;
+        font-size: clamp(1.5rem, 4vw, 2.25rem);
+        font-weight: 600;
+        line-height: 1.2;
+        max-width: 16ch;
+        color: #fafafa;
+      }
+      pre {
+        margin: 1rem 0 0;
+        padding: 1rem 1.25rem;
+        overflow-x: auto;
+        border: 1px solid #262626;
+        border-radius: 0.75rem;
+        font-size: 0.875rem;
+        line-height: 1.5;
+        color: #e5e5e5;
+        background: #141414;
+      }
+      pre:focus-visible {
+        outline: 2px solid #efa463;
+        outline-offset: 2px;
+      }
+      footer {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+        border-top: 1px solid #1f1f1f;
+        font-size: 0.875rem;
+        color: #a3a3a3;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>The dune scene, on any page</h1>
+      <p>
+        This page is plain HTML: no framework and none of the site's styles. Each box below is a
+        <code>div</code> with <code>data-sahra</code>, and one script tag starts them all. Move the
+        pointer or a finger across a box for a gust of wind.
+      </p>
+
+      <h2>As it comes</h2>
+      <div data-sahra class="scene"></div>
+      <p>The light moves through the day, and the number of grains suits the device.</p>
+      <pre
+        tabindex="0"
+        aria-label="The code for the scene above"
+      ><code>&lt;div data-sahra style="height: 420px"&gt;&lt;/div&gt;
+&lt;script type="module" src="https://sahra-khaki.vercel.app/embed/sahra.js"&gt;&lt;/script&gt;</code></pre>
+
+      <h2>Your own colours, one light, fewer grains</h2>
+      <div
+        data-sahra
+        data-light="dawn"
+        data-sky="#070b14"
+        data-horizon="#1d2740"
+        data-ground="#080a10"
+        data-sand="#c9d6f0"
+        data-shade="#3b4a6b"
+        data-density="low"
+        class="scene moonlight"
+      >
+        <p class="overlay">Text inside the box stays above the scene.</p>
+      </div>
+      <p>Colours replace the light's own and hold it still; a lower density draws fewer grains.</p>
+      <pre tabindex="0" aria-label="The code for the scene above"><code>&lt;div data-sahra
+  data-light="dawn"
+  data-sky="#070b14" data-horizon="#1d2740" data-ground="#080a10"
+  data-sand="#c9d6f0" data-shade="#3b4a6b"
+  data-density="low"
+  style="height: 420px"&gt;
+  &lt;p&gt;Text inside the box stays above the scene.&lt;/p&gt;
+&lt;/div&gt;</code></pre>
+
+      <h2>On your site</h2>
+      <p>
+        Step-by-step instructions for Webflow, WordPress and any other site, with every option:
+        <a href="https://github.com/MostafaSaafan5517/sahra/blob/main/docs/embedding.md"
+          >embedding the scene</a
+        >.
+      </p>
+    </main>
+    <footer>
+      <p>%SITE_NAME% is a fictional studio, made as a portfolio project by Mostafa Saafan.</p>
+    </footer>
+  </body>
+</html>

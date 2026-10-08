@@ -38,6 +38,15 @@ const BUDGETS: Budget[] = [
   { name: "Lab script", file: /^lab-[\w-]+\.js$/, maxKb: 2, gzip: true },
   { name: "Lab styles", file: /^lab-[\w-]+\.css$/, maxKb: 2, gzip: true },
   { name: "Lab scroll story (GSAP)", file: /^story-[\w-]+\.js$/, maxKb: 50, gzip: true },
+  // What another site loads: the loader at once, the scene only where it can run.
+  { name: "embed loader", dir: "dist/embed", file: /^sahra\.js$/, maxKb: 5, gzip: true },
+  {
+    name: "embed scene (Three.js and shaders)",
+    dir: "dist/embed/assets",
+    file: /^sahra-scene-[\w-]+\.js$/,
+    maxKb: 145,
+    gzip: true,
+  },
   // Midday is the busiest picture of the day, so the largest file at each width.
   { name: "Lab still, phone", file: /^midday-720-[\w-]+\.webp$/, maxKb: 60, gzip: false },
   { name: "Lab still, laptop", file: /^midday-1440-[\w-]+\.webp$/, maxKb: 140, gzip: false },

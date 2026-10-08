@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { type DeviceSignals, initialTier, isSoftwareRenderer, QUALITY_TIERS } from "./quality";
+import {
+  type DeviceSignals,
+  initialTier,
+  isSoftwareRenderer,
+  QUALITY_TIERS,
+  startingTier,
+  tierNamed,
+} from "./quality";
 
 const tierName = (signals: Partial<DeviceSignals>) =>
   QUALITY_TIERS[
@@ -63,5 +70,36 @@ describe("isSoftwareRenderer", () => {
     expect(isSoftwareRenderer("Adreno (TM) 722")).toBe(false);
     expect(isSoftwareRenderer("Apple GPU")).toBe(false);
     expect(isSoftwareRenderer("")).toBe(false);
+  });
+});
+
+describe("startingTier", () => {
+  const capableLaptop: DeviceSignals = {
+    cores: 8,
+    memoryGb: 8,
+    touchFirst: false,
+    saveData: false,
+    renderer: "ANGLE (Intel, Intel(R) HD Graphics 4600 Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  };
+  const weakPhone: DeviceSignals = { ...capableLaptop, cores: 2, memoryGb: 2, touchFirst: true };
+  const nameOf = (index: number) => QUALITY_TIERS[index]?.name;
+
+  it("follows the device when no highest tier is given", () => {
+    expect(nameOf(startingTier(capableLaptop))).toBe("high");
+    expect(nameOf(startingTier(weakPhone))).toBe("low");
+  });
+
+  it("starts no higher than the highest tier given", () => {
+    expect(nameOf(startingTier(capableLaptop, "medium"))).toBe("medium");
+    expect(nameOf(startingTier(capableLaptop, "minimal"))).toBe("minimal");
+  });
+
+  it("keeps a lighter start when the device asks for one", () => {
+    expect(nameOf(startingTier(weakPhone, "high"))).toBe("low");
+  });
+
+  it("ignores a name that is not a tier", () => {
+    expect(tierNamed("dense")).toBe(-1);
+    expect(nameOf(startingTier(capableLaptop, "dense"))).toBe("high");
   });
 });
