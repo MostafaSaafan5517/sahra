@@ -72,6 +72,7 @@ test("shows the studio's name, its line, its links and the portfolio label", asy
     "href",
     "https://www.upwork.com/freelancers/~0104fa36ecdc4bf8a1",
   );
+  await expect(page.getByRole("link", { name: "The Lab" })).toHaveAttribute("href", "/lab/");
   await expect(page.getByRole("contentinfo")).toContainText("fictional studio");
   await expect(page.getByRole("contentinfo")).toContainText("portfolio project by Mostafa Saafan");
 });
@@ -82,7 +83,7 @@ test("reaches every link from the keyboard, with a visible focus ring", async ({
 }) => {
   test.skip(isMobile, "Keyboard focus is a desktop concern; phones have no Tab key.");
   await page.goto("/");
-  for (const name of ["Hire on Upwork", "Source on GitHub"]) {
+  for (const name of ["Hire on Upwork", "The Lab", "Source on GitHub"]) {
     await page.keyboard.press("Tab");
     const link = page.getByRole("link", { name });
     await expect(link).toBeFocused();

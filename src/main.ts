@@ -1,5 +1,6 @@
 import "./style.css";
 import { isSoftwareRenderer, rendererName } from "./scene/quality";
+import { whenPageIsIdle } from "./when-idle";
 
 /** Points need no depth buffer, stencil or antialiasing; an opaque canvas composites cheaper. */
 const CONTEXT_ATTRIBUTES: WebGLContextAttributes = {
@@ -14,19 +15,6 @@ const CANVAS_FADE_MS = 1000;
 const sceneContainer = document.querySelector<HTMLElement>("[data-scene]");
 if (sceneContainer) {
   whenPageIsIdle(() => void mountScene(sceneContainer));
-}
-
-/**
- * Runs the task after the page has loaded and the browser is idle, so the scene's
- * download and startup never compete with the content's first paint.
- */
-function whenPageIsIdle(task: () => void): void {
-  const schedule = () => {
-    if ("requestIdleCallback" in window) requestIdleCallback(task, { timeout: 1000 });
-    else setTimeout(task, 0);
-  };
-  if (document.readyState === "complete") schedule();
-  else addEventListener("load", schedule, { once: true });
 }
 
 /**

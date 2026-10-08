@@ -1,0 +1,127 @@
+/*
+ * The Lab's line drawing (the SVG comes from src/lab/pattern.ts). Every path has pathLength="1",
+ * so a dash 1 long covers a whole line, however long it really is, and moving the dash's offset
+ * from 1 to 0 draws it. At rest every line is simply whole: the animations only add the drawing,
+ * so with reduced motion (or before any CSS animation runs) the pattern shows finished.
+ *
+ * The figure (`.drawing`) sets the box (3 by 2, square on phones); the drawing covers it,
+ * cropping its sides.
+ */
+.pattern {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke-linejoin: round;
+}
+
+.pattern path {
+  stroke-dasharray: 1 1;
+}
+
+/* The construction lines: clear while the stars are drawn on them, a faint trace afterwards. */
+.pattern-tiling {
+  opacity: 0.12;
+  stroke: oklch(55.6% 0 0); /* neutral-500 */
+  stroke-width: 1;
+}
+
+.pattern-stars {
+  stroke: oklch(87% 0 0); /* neutral-300 */
+  stroke-width: 1.25;
+}
+
+/* The small stars stay back, so the eight-point stars lead. */
+.pattern-stars-small {
+  stroke: oklch(43.9% 0 0); /* neutral-600 */
+}
+
+/* Strokes are in the drawing's units, which shrink with it: about 1 pixel wide at every size. */
+@media (width < 40rem) {
+  .pattern-tiling {
+    stroke-width: 1.4;
+  }
+
+  .pattern-stars {
+    stroke-width: 1.75;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pattern-tiling {
+    animation: pattern-fade-back 1.2s ease-in-out 3.4s both;
+  }
+
+  .pattern-tiling path {
+    animation: pattern-draw 1.2s cubic-bezier(0.65, 0, 0.35, 1) calc(var(--order) * 0.8s) both;
+  }
+
+  .pattern-stars path {
+    animation: pattern-draw 1.6s cubic-bezier(0.65, 0, 0.35, 1) calc(0.9s + var(--order) * 1.4s)
+      both;
+  }
+
+  /*
+   * After the drawing, a slow wave of amber light keeps passing outwards over the large stars.
+   * Repainting these lines is cheap where Chrome rasterizes on the GPU, as it does on phones:
+   * measured at 60 fps on a 2015 laptop GPU with the CPU slowed four times, ahead of a
+   * compositor-only ring blended over the drawing (a render surface costs more than the lines).
+   */
+  .pattern-stars-large path {
+    animation:
+      pattern-draw 1.6s cubic-bezier(0.65, 0, 0.35, 1) calc(0.9s + var(--order) * 1.4s) both,
+      pattern-glint 10s ease-in-out calc(4.5s + var(--order) * 3s) infinite;
+  }
+
+  /* Set by src/lab/main.ts: held until on screen, paused while off screen. */
+  .drawing.is-offscreen * {
+    animation-play-state: paused;
+  }
+
+  /* Set for a moment by "Draw it again": removing the animations lets them start anew. */
+  .drawing.is-restarting * {
+    animation: none;
+  }
+}
+
+@keyframes pattern-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes pattern-fade-back {
+  from {
+    opacity: 0.6;
+  }
+
+  to {
+    opacity: 0.12;
+  }
+}
+
+@keyframes pattern-glint {
+  0%,
+  30%,
+  100% {
+    stroke: oklch(87% 0 0);
+  }
+
+  12% {
+    stroke: var(--color-accent);
+  }
+}
+
+/*
+ * The scroll story, once src/lab/story.ts has started it: the page's scroll moves the day's row
+ * (GSAP translates it), so the row is as wide as its pictures and no longer scrolls or snaps.
+ */
+[data-story][data-enhanced] [data-story-track] {
+  width: max-content;
+  overflow: visible;
+  scroll-snap-type: none;
+}
