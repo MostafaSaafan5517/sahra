@@ -175,6 +175,28 @@ test("starts boxes added to the page later, and releases the scene of a box take
     .toBe(true);
 });
 
+test("starts a box inside a shadow root when the page asks with mount()", async ({ page }) => {
+  // A web component's own markup is out of the script's sight, so the page mounts the box itself.
+  await openHostPage(
+    page,
+    `<my-hero></my-hero>
+     <script>
+       customElements.define("my-hero", class extends HTMLElement {
+         constructor() {
+           super();
+           this.attachShadow({ mode: "open" }).innerHTML =
+             '<div data-sahra data-quality="minimal" style="height: 240px"></div>';
+         }
+       });
+     </script>
+     <script type="module">
+       import { mount } from "${EMBED_SCRIPT}";
+       mount(document.querySelector("my-hero").shadowRoot.querySelector("[data-sahra]"));
+     </script>`,
+  );
+  await expect(page.locator("my-hero [data-sahra]")).toHaveAttribute("data-state", "running");
+});
+
 test.describe("with reduced motion", () => {
   test.use({ reducedMotion: "reduce" });
 

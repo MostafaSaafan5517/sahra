@@ -23,6 +23,8 @@ export default defineConfig({
     // Three.js's WebGLRenderer is about 520 kB minified (130 kB gzipped), in the scene's own chunk.
     chunkSizeWarningLimit: 600,
     rolldownOptions: {
+      // An app build drops what an entry exports; sahra.js exports mount() for pages to import.
+      preserveEntrySignatures: "exports-only",
       input: {
         sahra: resolve(import.meta.dirname, "src/embed/sahra.ts"),
         demo: resolve(import.meta.dirname, "embed/index.html"),
