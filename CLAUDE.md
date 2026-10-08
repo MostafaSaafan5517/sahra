@@ -39,10 +39,10 @@ The project name lives only in `src/config.ts` (`SITE_NAME`). HTML pages use the
 
 ## The text layer
 
-- One composition over the scene: the studio's name (`h1`), one line, the links (GitHub source, Upwork profile) and, once the Calendly link exists, "Book a call". A footer says plainly that the studio is fictional and the site a portfolio project. Copy: no em or en dashes, no invented clients, numbers or praise.
+- One composition over the scene: the studio's name (`h1`), one line, one action ("Hire on Upwork", an amber pill, to Mostafa's Upwork profile) and one quiet link ("Source on GitHub"). Mostafa dropped the brief's Calendly "Book a call" on 2026-10-08; there is one contact action, so no second link with the same intent. A footer says plainly that the studio is fictional and the site a portfolio project. Copy: no em or en dashes, no invented clients, numbers or praise.
 - The text sits in the sky, above the dunes, on every screen shape; `.text-scrim` (`src/style.css`) is a soft dark wash behind it for wide windows where far dunes reach up, and the footer sits on a dark gradient over the near sand. Both work on the poster too.
-- Design (per the `design-taste-frontend` skill): Instrument Sans; one accent, the dusk amber `--color-accent` (#efa463, also the icon's sun), used for hover and focus; text in neutrals; left-aligned, airy, dark only (the scene and poster are a dark desert). The icon (`src/favicon.svg`) is a single geometric mark: the sun half set behind the horizon.
-- Readability is measured, not assumed: `e2e/readability.spec.ts` sets six points of the light cycle at the densest tier, makes the text transparent, measures the background behind every text element from screenshots (95th-percentile pixel: the scene, haze and wash together) and checks WCAG AA against each text's colour. Lowest measured: footer 9.2:1, the line 14.7:1, links 14:1, name 18.4:1. Computed colours can come back as `oklch()`: the test converts them by painting a pixel.
+- Design (per the `design-taste-frontend` skill): Instrument Sans; one accent, the dusk amber `--color-accent` (#efa463, also the icon's sun), used for the one action's fill, hover and focus; text in neutrals; left-aligned, airy, dark only (the scene and poster are a dark desert). The icon (`src/favicon.svg`) is a single geometric mark: the sun half set behind the horizon.
+- Readability is measured, not assumed: `e2e/readability.spec.ts` sets six points of the light cycle at the densest tier, makes the text transparent, measures the background behind every text element from screenshots (95th-percentile pixel: the scene, haze and wash together) and checks WCAG AA against each text's colour. Lowest measured: footer 9:1, "Hire on Upwork" (dark ink on the amber pill) 9.6:1, the line 14.6:1, the GitHub link 15.9:1, name 18.4:1. Computed colours can come back as `oklch()`: the test converts them by painting a pixel.
 
 ## How the scene loads
 
@@ -194,4 +194,4 @@ tsconfig.node.json   config files, e2e/ and scripts/ (Node types, plus DOM for c
 
 ## Status
 
-Phases 0 to 3 done and live (scene, light, poster, adaptive quality; measurements in `docs/performance.md`). Phase 4 (text layer and booking) in progress on `feature/sahra-content-layer`; "Book a call" waits for Mostafa's Calendly link. Phases: 0 setup, 1 scene prototype, 2 art direction, 3 performance and adaptivity, 4 content layer and booking, 5 Lab, 6 embeddable package, 7 docs and portfolio packaging.
+Phases 0 to 3 done and live (scene, light, poster, adaptive quality; measurements in `docs/performance.md`). Phase 4 (text layer) on `feature/sahra-content-layer` (PR #3); the Calendly booking was dropped, the action is "Hire on Upwork". Phases: 0 setup, 1 scene prototype, 2 art direction, 3 performance and adaptivity, 4 content layer and booking, 5 Lab, 6 embeddable package, 7 docs and portfolio packaging.
