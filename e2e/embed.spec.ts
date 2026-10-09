@@ -135,6 +135,29 @@ test("starts a scene only once its box comes near the screen", async ({ page }) 
   await expect(page.locator("[data-sahra]")).toHaveAttribute("data-state", "running");
 });
 
+test("loads one small file, and the scene only once a box starts it", async ({ page }) => {
+  const embedFiles: string[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname.startsWith("/embed/")) embedFiles.push(url.pathname);
+  });
+  await openHostPage(
+    page,
+    `<div style="height: 300vh">A long page.</div>
+     <div data-sahra data-quality="minimal" style="height: 240px"></div>`,
+  );
+  await page.waitForLoadState("load");
+  await page.waitForTimeout(1000);
+  expect(embedFiles, "the loader is one file, with nothing else until a box starts").toEqual([
+    "/embed/sahra.js",
+  ]);
+
+  await page.locator("[data-sahra]").scrollIntoViewIfNeeded();
+  await expect(page.locator("[data-sahra]")).toHaveAttribute("data-state", "running");
+  expect(embedFiles).toHaveLength(2);
+  expect(embedFiles[1]).toMatch(SCENE_CHUNK);
+});
+
 test("leaves the box's own background where the scene cannot run, and downloads nothing", async ({
   page,
 }) => {
