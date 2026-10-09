@@ -13,9 +13,11 @@
     <link rel="icon" href="../src/favicon.svg" type="image/svg+xml" />
     <!--
       Plain HTML on purpose: no framework and none of the site's styles, like any page the scene
-      may be embedded in. The script is the same one other sites load.
+      may be embedded in. The script is the built sahra.js beside this page, the very file other
+      sites load; vite-ignore keeps the build from bundling it a second time for this page, which
+      split the loader into two files (sahra.js re-exporting a shared chunk).
     -->
-    <script type="module" src="../src/embed/sahra.ts"></script>
+    <script type="module" src="./sahra.js" vite-ignore></script>
     <style>
       :root {
         color-scheme: dark;

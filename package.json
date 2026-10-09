@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build && vite build -c vite.embed.config.ts",
-    "dev:embed": "vite -c vite.embed.config.ts",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",
     "lint": "eslint --max-warnings=0 .",

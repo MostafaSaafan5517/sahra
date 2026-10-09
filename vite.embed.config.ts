@@ -9,7 +9,12 @@ import { siteName } from "./vite.config.ts";
  * - its name never changes (no hash), and the other files have hashed names;
  * - every path between them is relative (`base: "./"`), resolved against the script's own URL,
  *   never against the page that embeds it;
- * - there is no modulepreload helper, which would add links to the embedding page.
+ * - there is no modulepreload helper, which would add links to the embedding page;
+ * - the loader is one file: the demo page loads the built sahra.js as any site does (vite-ignore),
+ *   rather than bundling the loader again, which made sahra.js a stub importing a shared chunk.
+ *
+ * There is no dev server for it: the demo page needs the built sahra.js. Build and preview
+ * (`pnpm build && pnpm preview`), then open /embed/.
  */
 export default defineConfig({
   root: resolve(import.meta.dirname, "embed"),
@@ -24,7 +29,9 @@ export default defineConfig({
     chunkSizeWarningLimit: 600,
     rolldownOptions: {
       // An app build drops what an entry exports; sahra.js exports mount() for pages to import.
-      preserveEntrySignatures: "exports-only",
+      // "allow-extension" also lets it export the code it shares with the scene's chunk (the light,
+      // the quality tiers), so that code stays in sahra.js instead of a third file loaded with it.
+      preserveEntrySignatures: "allow-extension",
       input: {
         sahra: resolve(import.meta.dirname, "src/embed/sahra.ts"),
         demo: resolve(import.meta.dirname, "embed/index.html"),
@@ -36,5 +43,4 @@ export default defineConfig({
       },
     },
   },
-  server: { port: 3304, strictPort: true },
 });
