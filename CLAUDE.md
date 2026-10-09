@@ -162,7 +162,7 @@ GLSL lives in `src/scene/shaders/*.glsl`, imported as strings with Vite's `?raw`
 
 ## Lighthouse and CI
 
-- `pnpm lighthouse` (after `pnpm build`) runs Lighthouse CI five times on the mobile preset against every page in `dist/` (it finds `index.html` and `lab/index.html` by itself), served by Lighthouse CI's own static server (gzip, like Vercel). The budgets apply to each page. It fails when the median of the five values (`aggregationMethod: "median"`, which absorbs up to two slow, cold runs) is below Performance 90 or Accessibility, Best Practices, SEO 95, or layout shift is above 0.01. Never use `median-run`: Lighthouse CI picks that run by its first paint and time to interactive, not by score, and it once passed a build whose scores were 77, 77, 78, 89 and 93. Reports land in `.lighthouseci/` (open the `.html` files).
+- `pnpm lighthouse` (after `pnpm build`) runs Lighthouse CI five times on the mobile preset against every page in `dist/` (it finds `index.html`, `lab/index.html` and `embed/index.html` by itself), served by Lighthouse CI's own static server (gzip, like Vercel). The budgets apply to each page. It fails when the median of the five values (`aggregationMethod: "median"`, which absorbs up to two slow, cold runs) is below Performance 90 or Accessibility, Best Practices, SEO 95, or layout shift is above 0.01. Never use `median-run`: Lighthouse CI picks that run by its first paint and time to interactive, not by score, and it once passed a build whose scores were 77, 77, 78, 89 and 93. Reports land in `.lighthouseci/` (open the `.html` files).
 - CI machines have no GPU, so CI's Lighthouse measures what a visitor without one gets: the text and the poster, no Three.js. `scripts/check-lighthouse-path.ts` reports which version of the home page each run measured (the scene's script downloaded or not) and fails if those runs disagree or, with `LIGHTHOUSE_EXPECTS=poster` (set in CI), if any measured the scene; it also fails if another page (the Lab) loaded the scene. Locally, with a GPU, the home page's runs measure the live scene: run it without `LIGHTHOUSE_EXPECTS`. The live scene's cost is measured where there is a GPU (`docs/performance.md`), and its weight is gated in CI by `pnpm size` (`scripts/check-sizes.ts`, after `pnpm build`: the home page's script, the shared styles and script, the scene chunk, the font, the posters, and the Lab's page with its drawing, its script, its styles, the scroll story's GSAP chunk and the largest still at phone and laptop size, against fixed budgets).
 - Lighthouse's own injected script (`_lighthouse-eval.js`) sometimes shows up as a long task of up to a second or so, mostly in the first, cold run; it is noise in Total Blocking Time that the median absorbs.
 - The metric to watch is Total Blocking Time: Lighthouse simulates a slow phone CPU (4x), and Three.js's startup shows up there.
@@ -253,7 +253,8 @@ scripts/
 lighthouserc.json    Lighthouse CI: runs, Chrome flags, score budgets
 vercel.json          Vercel: caching for /assets/ and /embed/, CORS for /embed/
 docs/
-  performance.md     real-device frame rates, Lighthouse, what the scene costs
+  how-it-works.md    the technical write-up: shaders, adaptive quality, loading, how it is measured
+  performance.md     real-device frame rates, Lighthouse for every page, the Lab and the embed's costs
   embedding.md       how site owners embed the scene (Webflow, WordPress, any site)
 vite.config.ts       Tailwind, the %SITE_NAME% and %LAB_PATTERN% plugins, the two pages, ports
 vite.embed.config.ts the embed and its demo page, into dist/embed/ (relative paths, fixed sahra.js)
@@ -264,6 +265,13 @@ tsconfig.json        app code (browser types)
 tsconfig.node.json   config files, e2e/ and scripts/ (Node types, plus DOM for code run in the page)
 ```
 
+## The portfolio package
+
+The Upwork package lives in `portfolio-package/` (kept out of git through `.git/info/exclude`, like the brief: videos do not belong in the repo): `sahra-cover-2000x1500.jpg`, `sahra-demo-1280x720.mp4` and `upwork-package.txt` (title of 68 characters, description of 527, five skills, how to add it on Upwork, and a shot list for recording on a phone).
+
+- The video is the live site in a full-screen Chromium on the real GPU (Playwright, headed, `--use-angle=d3d11`), captured with ffmpeg's Desktop Duplication grabber (`ddagrab`, 60 fps, no cursor) while a script plays the visit: the home scene, two pointer sweeps for gusts, "The Lab", the pattern drawing, then a scroll through the story. Full screen must be set through Chrome's own window control (`Browser.setWindowBounds` with `windowState: "fullscreen"`; `--kiosk` had no effect under Playwright), and the script refuses to record unless the page covers the whole screen: a first take captured the desktop around a windowed browser and was deleted. Every take gets a contact sheet (a frame every two seconds) checked before use. Encoded to 1280 by 720 (the laptop's screen is 1366 by 768), 60 fps, H.264 with `+faststart`, half-second fades.
+- The cover is the production embed, held at dusk, with the name, line and three tags over it in the site's font, rendered at 1000 by 750 at double density (so grains stay visible as a thumbnail) and saved as JPG. Upwork asks for 4:3 images under 5 MB.
+
 ## Status
 
-Phases 0 to 5 done and live (scene, light, poster, adaptive quality, text layer, the Lab; measurements in `docs/performance.md`; the Calendly booking was dropped, the action is "Hire on Upwork"). Phase 6 (the embed) on `feature/sahra-embed` (draft PR #5): the embed, its options, its demo page, `docs/embedding.md` and Vercel's headers are done; after merging, check the CORS header and a cross-origin embed on production. Phases: 0 setup, 1 scene prototype, 2 art direction, 3 performance and adaptivity, 4 content layer and booking, 5 Lab, 6 embeddable package, 7 docs and portfolio packaging.
+Phases 0 to 6 done and live (scene, light, poster, adaptive quality, text layer, the Lab, the embed; the Calendly booking was dropped, the action is "Hire on Upwork"). The embed was checked on production from a page on another domain: CORS headers, the one-file loader, `mount()`. Phase 7 (docs and the portfolio package) on `docs/sahra-readme-and-write-up` (draft PR #7): the README, `docs/how-it-works.md`, the updated `docs/performance.md` and the Upwork package (laptop recording, cover, title, description, skills) are done; a phone recording on Mostafa's HONOR 400 would be the main video. Phases: 0 setup, 1 scene prototype, 2 art direction, 3 performance and adaptivity, 4 content layer and booking, 5 Lab, 6 embeddable package, 7 docs and portfolio packaging.

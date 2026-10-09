@@ -9,7 +9,7 @@ Sahra's targets come from its brief: a steady 60 frames a second on a mid-range 
 - **All motion on the GPU.** Each grain's position is computed in the vertex shader every frame. Per frame, JavaScript sets a handful of uniforms (time, light, gusts) and draws two objects: the sky and the sand.
 - **Quality that fits the device.** Four tiers, from 49,152 grains at up to pixel ratio 2 down to 9,216 grains at pixel ratio 0.75. The starting tier comes from the device (cores, memory, phone or desktop, software rendering). A frame-rate monitor then steps down a tier when the slowest quarter of frames takes longer than 22 ms. At the lightest tier, the scene gives up for the poster below about 25 fps.
 - **Rest when unseen.** Rendering stops while the tab is hidden or the canvas is off screen, and the scene's clock stands still meanwhile. Stopping releases the GPU's memory at once.
-- **Long caching.** Every script, style and poster has a content hash in its name and is cached for a year.
+- **Long caching.** Every script, style and poster has a content hash in its name and is cached for a year. The embed's `sahra.js` keeps its name (other sites link to it), so it is cached for an hour.
 
 ## Real devices
 
@@ -32,16 +32,48 @@ Browsers without a GPU can still offer WebGL, drawn in software (Chrome's SwiftS
 
 The CI gate runs Lighthouse five times on the mobile preset (a simulated mid-range phone with a 4x slower CPU and a slow 4G connection) against the production build, and fails when the median of the five values misses a budget. CI machines have no GPU, so CI measures what a visitor without one gets: the text and the poster. A check confirms every run measured exactly that, and size budgets on the built files (`pnpm size`) keep the scene's weight in check, since CI's Lighthouse never downloads it. The live scene is measured where there is a GPU.
 
-Measured on 2026-10-07, five runs each, Performance score per run:
+The latest CI gate, on commit a4c31e0 (2026-10-09, the code now live), five runs per page, Performance score per run:
 
-| Where                                          | What it measures                        | Performance per run    | Median | Accessibility, Best Practices, SEO | Layout shift |
-| ---------------------------------------------- | --------------------------------------- | ---------------------- | ------ | ---------------------------------- | ------------ |
-| GitHub Actions (the CI gate), commit cd6486f   | the poster path (no GPU)                | 77, 100, 100, 100, 100 | 100    | 100 in every run                   | 0            |
-| The 2015 laptop above, after the startup split | the live scene (Intel HD Graphics 4600) | 90, 100, 100, 98, 95   | 98     | 100 in every run                   | 0            |
+| Page       | What CI measures                     | Performance per run    | Median | Accessibility, Best Practices, SEO | Layout shift | Largest paint |
+| ---------- | ------------------------------------ | ---------------------- | ------ | ---------------------------------- | ------------ | ------------- |
+| Home       | the text and the poster (no GPU)     | 88, 100, 100, 100, 100 | 100    | 100 in every run                   | 0            | 1.2 to 1.4 s  |
+| Lab        | the pattern and the story            | 100 in every run       | 100    | 100 in every run                   | 0            | 1.4 to 1.7 s  |
+| Embed demo | the page, with the boxes' background | 100 in every run       | 100    | 100 in every run                   | 0            | 0.9 s         |
 
-The low first CI run is the usual cold machine: most of its blocking time is Lighthouse's own injected script, not the page. On the laptop, the median Total Blocking Time is 79 ms and the scene's longest task about 90 to 120 ms in Lighthouse's simulated slow phone.
+The one lower run is the usual cold first run on a fresh CI machine: its blocking time is Lighthouse's own injected script, not the page.
+
+With a GPU, on the 2015 laptop above, Lighthouse measures the live scene, and the numbers move with whatever else the machine is doing (its benchmark index ranged from 700 to 1,400 across these days):
+
+| When       | Page       | What it measures                        | Performance per run  | Median |
+| ---------- | ---------- | --------------------------------------- | -------------------- | ------ |
+| 2026-10-07 | Home       | the live scene, after the startup split | 90, 100, 100, 98, 95 | 98     |
+| 2026-10-09 | Home       | the live scene, on a busier machine     | 82, 87, 89, 90, 95   | 89     |
+| 2026-10-09 | Lab        | the pattern and the story, with GSAP    | 98, 99, 99, 100, 100 | 99     |
+| 2026-10-09 | Embed demo | two live scenes                         | 91, 95, 96, 97, 99   | 96     |
+
+Accessibility, Best Practices and SEO were 100 and layout shift 0 in every one of these runs. On the home page the score follows the machine: on one busy evening it measured the previous release at 77 to 95. The scene's own cost there is its startup (see below); in Lighthouse's simulated slow phone its longest task is about 90 to 120 ms.
 
 Before the poster path, CI measured the scene drawn in software, with a gate that swung between 85 and 92 depending on how fast the CI machine happened to be; the earlier aggregation (`median-run`, which picks a run by its first paint and time to interactive, not by score) even let a build with scores of 77, 77, 78, 89 and 93 through.
+
+## The Lab
+
+Measured in Chromium on the same laptop's GPU, with a phone-sized window and the CPU slowed four times, sampling every frame with `requestAnimationFrame`:
+
+| What                                              | Frame rate                | Slowest frames                  |
+| ------------------------------------------------- | ------------------------- | ------------------------------- |
+| The pattern drawing itself (the first 4 s)        | usually 60 fps (43 to 60) | 95th percentile 16.8 to 50 ms   |
+| The pattern idling, its amber light passing over  | usually 60 fps (52 to 60) | 95th percentile 16.7 to 33.3 ms |
+| Scrolling steadily through the whole scroll story | 59.5 fps                  | 95th percentile 16.7 ms         |
+
+The ranges are over several runs on a busy machine; the low ends came from runs while other programs were working. The pattern is plain SVG written at build time, so it costs no script; its light repaints about 35 lines a frame, which is cheap where the browser draws on the GPU. A version that moved the light on the compositor instead (an amber ring blended over the drawing) measured slower with a GPU and much slower without one, so it was dropped. The scroll story's GSAP (about 43 kB compressed) loads only once the page is idle, and its motion is only transforms and opacity.
+
+One lesson worth keeping: headless Chromium without a GPU draws and composites everything on the CPU, so SVG and CSS animation measured there looks several times slower than it is. These numbers come from Chromium using the real GPU.
+
+## The embed
+
+- **What a site downloads:** one file, `sahra.js`, about 3.3 kB compressed. The scene (about 134 kB) comes only when a box is near the screen and the device can run it, and is then cached for a year. A test checks that an embedding page fetches exactly the loader before any box starts, then only the scene.
+- **Checked live** from a page on another domain (`https://host.example`, served by the test browser) with the real GPU: two boxes ran, one inside a shadow root started with `mount()`, with no errors, and both files carried the `Access-Control-Allow-Origin` header that cross-domain module scripts need.
+- **The demo page** scores 100 in CI (no GPU, so the boxes keep their background) and 91 to 99 on the laptop with two live scenes.
 
 ## Known costs, and the next levers
 
